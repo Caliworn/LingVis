@@ -270,6 +270,44 @@ ol.steps li.cur .tx{display:block}
 .params .ph{font:600 10.5px Inter;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px}
 .params b{color:var(--ink);font-weight:600}
 .params .src{margin-top:8px;font-size:11px}
+
+/* ================= portrait: the 24 orders open as a sheet from the order's title ================= */
+.order-btn{display:inline-flex;align-items:center;gap:8px;min-width:0;border:0;background:none;padding:0;margin:0;cursor:default;text-align:left}
+.order-btn .pick,.grip,.sheet-x,.scrim,.caption .tx-t{display:none}
+.app.portrait{grid-template-rows:auto auto auto;grid-template-areas:"head" "stage" "pane"}
+.app.portrait .tabs{display:none}
+.app.portrait #paneSteps{display:flex}
+.app.portrait .order-btn{cursor:pointer;-webkit-tap-highlight-color:transparent}
+/* room for the chevron: Paths stays on the title's line down to 320px */
+.app.portrait .st-top{column-gap:8px}
+.app.portrait .st-top .spacer{display:none}
+.app.portrait #pathsBtn{margin-left:auto}
+.app.portrait .order-btn{gap:6px}
+.app.portrait .order-btn .pick{display:grid;place-items:center;flex:none;width:24px;height:24px;border-radius:50%;border:1px solid var(--line);background:var(--surface-2);color:var(--muted)}
+.pick svg{width:12px;height:12px}
+.app.portrait #paneOrders{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:50;max-width:600px;margin:0 auto;max-height:78vh;max-height:78dvh;
+  border-radius:18px 18px 0 0;border-bottom:0;padding:0 12px calc(8px + env(safe-area-inset-bottom));
+  transform:translateY(105%);visibility:hidden;transition:transform .32s var(--ease),visibility 0s .32s}
+.app.portrait.sheet #paneOrders{transform:none;visibility:visible;transition:transform .32s var(--ease)}
+.app.portrait #paneOrders .scroll{overflow:auto;flex:1 1 auto;min-height:0;overscroll-behavior:contain}
+.app.portrait .sheet-head{touch-action:none;cursor:grab;padding-bottom:2px}
+.app.portrait .grip{display:block;width:36px;height:4px;border-radius:2px;background:var(--line);margin:8px auto 6px}
+.app.portrait #paneOrders h3{align-items:center}
+.app.portrait #paneOrders .cnt{display:flex;align-items:center;gap:10px}
+.app.portrait .sheet-x{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;border:1px solid var(--line);background:var(--surface-2);color:var(--muted);padding:0;cursor:pointer}
+.sheet-x svg{width:11px;height:11px}
+.app.portrait .or{padding:6px 6px}
+.app.portrait .or .tk span{line-height:22px;font-size:11px}
+.app.portrait .scrim{display:block;position:fixed;inset:0;z-index:45;background:rgb(0 0 0 / .32);opacity:0;pointer-events:none;transition:opacity .3s}
+.app.portrait.sheet .scrim{opacity:1;pointer-events:auto}
+/* the controls: the dots get a row of their own above the buttons; the speed is one button that cycles */
+.app.portrait .controls{flex-wrap:wrap;row-gap:12px}
+.app.portrait .dots{display:flex;order:-1;flex:1 0 100%;justify-content:center;gap:clamp(6px,2.6vw,12px);margin:-10px 0}
+.app.portrait .btn.primary{flex:1}
+.app.portrait .seg button:not(.on){display:none}
+.app.portrait .seg button{min-width:42px}
+/* a title cut short in the folded caption is given in full at the top of the opened explanation */
+.app.portrait .caption.clamped .tx-t{display:block;font-weight:600;margin-bottom:4px}
 </style>
 </head>
 <body>
@@ -286,7 +324,7 @@ ol.steps li.cur .tx{display:block}
 
   <main class="card stage-card">
     <div class="st-top">
-      <span class="order" id="order"></span>
+      <button class="order-btn" id="orderBtn" aria-controls="paneOrders"><span class="order" id="order"></span><span class="pick" aria-hidden="true"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 4.5 3 3 3-3"/></svg></span></button>
       <span class="spacer"></span>
       <button class="toggle" id="pathsBtn" title="Show movement paths (P)">Paths</button>
       <span id="status"></span>
@@ -310,8 +348,11 @@ ol.steps li.cur .tx{display:block}
 
   <div class="tabs" id="tabs"><button data-t="steps" class="on">Derivation</button><button data-t="orders">24 orders</button></div>
 
-  <section class="card pane" id="paneOrders">
-    <h3><span>All 24 orders</span><span>✓ 14 · ✕ 10</span></h3>
+  <div class="scrim" id="scrim"></div>
+  <section class="card pane" id="paneOrders" aria-label="All 24 orders">
+    <div class="sheet-head"><div class="grip" aria-hidden="true"></div>
+      <h3><span>All 24 orders</span><span class="cnt">✓ 14 · ✕ 10<button class="sheet-x" id="sheetX" aria-label="Close"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="m3 3 6 6M9 3l-6 6"/></svg></button></span></h3>
+    </div>
     <div class="scroll" id="table"></div>
     <div class="tbl-note">Frequencies as reported by Cinque (2005).</div>
   </section>
@@ -1084,9 +1125,11 @@ function stop(){ playing = false; goal = null; rate = 1; glide = 1; }
 function updateUI(){
   const s = states[cur];
   $('capN').textContent = `${cur + 1}/${states.length}`;
-  $('capT').innerHTML = s.title.replace(/_(\w)/g, '<sub>$1</sub>');
-  $('capX').innerHTML = s.tx;
+  const title = s.title.replace(/_(\w)/g, '<sub>$1</sub>');
+  $('capT').innerHTML = title;
+  $('capX').innerHTML = `<div class="tx-t">${title}</div>${s.tx}`;
   $('caption').classList.toggle('badc', !!s.bad);
+  markClamped();
   [...$('steps').children].forEach((li, i) => { li.classList.toggle('cur', i === cur); li.classList.toggle('done', i < cur); });
   const curLi = $('steps').children[cur];
   // keep the current step in view by scrolling the list only (scrollIntoView would also scroll the page)
@@ -1167,7 +1210,7 @@ for (let b = 0; b < 6; b++){
     r.innerHTML = `<span class="mk ${o.ok?'ok':'no'}">${o.ok?'✓':'✕'}</span>
       <span class="tk">${o.order.split(' ').map(k => `<span style="--c:${CAT[k].c}">${k}</span>`).join('')}</span>
       <span class="fq ${o.freq && o.freq.startsWith('very many') ? 'hi':''}">${o.freq || 'Ø'}</span>`;
-    r.onclick = () => { select(o.L); if (scrollY > 0) scrollTo({top:0, behavior:'smooth'}); }; // stacked layouts: back up to the tree
+    r.onclick = () => { closeSheet(false); select(o.L); if (scrollY > 0) scrollTo({top:0, behavior:'smooth'}); }; // stacked layouts: back up to the tree
     blk.append(r);
   });
   table.append(blk);
@@ -1252,6 +1295,63 @@ $('caption').addEventListener('click', e => {
 });
 addEventListener('resize', syncCaption);
 syncCaption();
+// a folded caption whose title is cut short repeats it in full when opened
+function markClamped(){ const t = $('capT'); $('caption').classList.toggle('clamped', capFolds() && t.scrollHeight > t.clientHeight + 1); }
+addEventListener('resize', markClamped);
+
+/* Portrait: the order's title opens the 24 orders as a sheet from the bottom (the tabs go). The sheet closes on
+   picking an order, on the close button, a tap outside it, Escape, or dragging it down by its top. */
+const app = $('app'), sheet = $('paneOrders');
+function syncMode(){
+  const p = capFolds();
+  app.classList.toggle('portrait', p);
+  $('orderBtn').disabled = !p;
+  if (p){ $('orderBtn').title = 'All 24 orders'; sheet.setAttribute('role', 'dialog'); sheet.setAttribute('aria-modal', 'true'); }
+  else { closeSheet(false); $('orderBtn').removeAttribute('title'); sheet.removeAttribute('role'); sheet.removeAttribute('aria-modal'); }
+}
+function openSheet(){
+  if (!app.classList.contains('portrait')) return;
+  app.classList.add('sheet'); document.body.style.overflow = 'hidden';
+  // the current order sits in the middle of the list
+  const sc = sheet.querySelector('.scroll'), sel = sheet.querySelector('.or.sel');
+  if (sel){ sc.scrollTop = sel.offsetTop - sc.offsetTop - (sc.clientHeight - sel.offsetHeight)/2; sel.focus({preventScroll:true}); }
+}
+function closeSheet(refocus = true){
+  if (!app.classList.contains('sheet')) return;
+  app.classList.remove('sheet'); sheet.style.transform = ''; document.body.style.overflow = '';
+  if (refocus) $('orderBtn').focus({preventScroll:true});
+}
+$('orderBtn').onclick = openSheet;
+$('sheetX').onclick = () => closeSheet();
+// only a tap that starts on the backdrop closes the sheet: a click that merely ends there (a drag released
+// outside the sheet, or a stray click some browsers send after a touch) leaves it open
+let scrimDown = false;
+$('scrim').addEventListener('pointerdown', () => { scrimDown = true; });
+$('scrim').onclick = () => { if (scrimDown) closeSheet(); scrimDown = false; };
+(() => { // drag the sheet down by its top to close it
+  const head = sheet.querySelector('.sheet-head');
+  let d = null;
+  head.addEventListener('pointerdown', e => {
+    if (!app.classList.contains('sheet') || e.target.closest('.sheet-x')) return;
+    d = {y0:e.clientY, id:e.pointerId, t0:performance.now(), dy:0};
+    try { head.setPointerCapture(e.pointerId); } catch (err) {}
+    sheet.style.transition = 'none';
+  });
+  head.addEventListener('pointermove', e => {
+    if (!d || e.pointerId !== d.id) return;
+    d.dy = Math.max(0, e.clientY - d.y0); sheet.style.transform = `translateY(${d.dy}px)`;
+  });
+  const end = e => {
+    if (!d || e.pointerId !== d.id) return;
+    const flick = d.dy/(performance.now() - d.t0) > .6;
+    sheet.style.transition = '';
+    if (d.dy > 90 || (flick && d.dy > 20)) closeSheet(); else sheet.style.transform = '';
+    d = null;
+  };
+  head.addEventListener('pointerup', end); head.addEventListener('pointercancel', end);
+})();
+addEventListener('resize', syncMode);
+syncMode();
 addEventListener('resize', regeometry); // some browsers skip the media query's change event
 svgEl.addEventListener('click', e => { if (e.button === 0) advance(); }); // click the derivation to advance
 // right-click the derivation to step back (a mouse's right button only: a long press on a touch screen keeps its menu)
@@ -1261,7 +1361,8 @@ svgEl.addEventListener('contextmenu', e => { if (!rightDown) return; rightDown =
 $('pathsBtn').onclick = () => { showPaths = !showPaths; $('pathsBtn').classList.toggle('on', showPaths); };
 $('resetBtn').onclick = () => jump(0);
 $('speedSeg').onclick = e => {
-  const b = e.target.closest('button'); if (!b) return;
+  let b = e.target.closest('button'); if (!b) return;
+  if (app.classList.contains('portrait')){ const bs = [...$('speedSeg').children]; b = bs[(bs.indexOf(b) + 1) % bs.length]; } // portrait shows one button: it cycles
   speed = +b.dataset.s;
   [...$('speedSeg').children].forEach(x => x.classList.toggle('on', x === b));
 };
@@ -1271,6 +1372,7 @@ $('tabs').onclick = e => {
   [...$('tabs').children].forEach(x => x.classList.toggle('on', x === b));
 };
 document.addEventListener('keydown', e => {
+  if (e.key === 'Escape'){ closeSheet(); return; }
   if (e.key === 'ArrowRight'){ e.preventDefault(); advance(); }
   else if (e.key === 'ArrowLeft'){ e.preventDefault(); retreat(); }
   else if (e.key === ' '){ e.preventDefault(); $('playBtn').click(); }
