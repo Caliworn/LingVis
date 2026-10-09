@@ -199,19 +199,20 @@ button{font:inherit;color:inherit}
   #paneOrders,#paneSteps{grid-area:pane;height:calc(100dvh - 70px)}
   .brand h1{font-size:18px}
   .theme-btn{width:28px;height:28px}
-  .stage-card{display:grid;grid-template-columns:minmax(0,1fr) 320px;grid-template-rows:auto minmax(0,1fr) auto;column-gap:14px;
-    grid-template-areas:"svg top" "svg cap" "svg foot";padding:10px 12px}
+  /* the linear order sits under the tree, so the explanation gets the whole right column between title and controls */
+  .stage-card{display:grid;grid-template-columns:minmax(0,1fr) clamp(300px,40vw,360px);grid-template-rows:auto minmax(0,1fr) auto;column-gap:14px;
+    grid-template-areas:"svg top" "svg cap" "surf ctl";padding:8px 12px}
   .st-top{grid-area:top;gap:8px;min-height:0}
   .order{font-size:20px}
   .stage-svg{grid-area:svg;height:100%;max-height:none;aspect-ratio:auto;margin:0}
   /* the side column has room: the full explanation shows inline (the controls stay pinned at the bottom) */
-  .caption{grid-area:cap;align-self:start;height:auto;max-height:100%;overflow:auto;margin-top:8px;cursor:auto;-webkit-user-select:text;user-select:text}
-  .caption .tt{display:block;-webkit-line-clamp:none;overflow:visible}
-  .caption .tx{display:block;position:static;padding:0;border:0;border-radius:0;background:none;box-shadow:none;color:var(--muted)}
+  .caption{grid-area:cap;align-self:start;height:auto;max-height:100%;overflow:auto;margin-top:6px;padding:8px 10px;gap:8px;cursor:auto;-webkit-user-select:text;user-select:text}
+  .caption .tt{display:block;-webkit-line-clamp:none;overflow:visible;font-size:13px}
+  .caption .tx{display:block;position:static;padding:0;border:0;border-radius:0;background:none;box-shadow:none;color:var(--muted);font-size:12.5px;line-height:1.4}
   .caption .more{display:none}
-  .st-foot{grid-area:foot;margin-top:8px}
-  .surface{min-width:100%}
-  .controls{width:100%;justify-content:space-between}
+  .st-foot{display:contents}
+  .surface{grid-area:surf;min-width:0;margin-top:6px}
+  .controls{grid-area:ctl;width:100%;justify-content:space-between;margin-top:6px}
   .dots{display:none}
   .controls{gap:5px}
   .btn.primary{min-width:64px;flex:1}
