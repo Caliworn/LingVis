@@ -501,7 +501,9 @@ function buildStates(def){
     let left = 1e9, right = -1e9;
     for (const k of root.desc){ const q = F.get(k); if (!q.n.kids){ const w = LW[q.t]; left = Math.min(left, q.x - w/2); right = Math.max(right, q.x + w/2); } }
     const pre = withSpec(lv, clone(agr), {k:'spec', t:'slot', item, w:right - left, off:root.x - left});
-    S.push({tree, pre, move:{item, n, crossed:cat, agr:lv.agr}, ty:'Move', moveTy:d.ty, title:`Move to Spec,Agr_${lv.s}P · ${d.ty}`, tx:d.tx});
+    // the depth of the curve the flight will take (also used to draw its path afterwards)
+    const fl = planFlight(layout(pre), F, item), depth = fl.R.p1.y - Math.max(fl.R.p0.y, fl.R.p3.y);
+    S.push({tree, pre, move:{item, n, crossed:cat, agr:lv.agr, depth}, ty:'Move', moveTy:d.ty, title:`Move to Spec,Agr_${lv.s}P · ${d.ty}`, tx:d.tx});
     n++;
   });
   return S;
@@ -665,18 +667,23 @@ function planFlight(P, F, item){
   const to = {x:ph.x, y:ph.y}; // the root lands exactly on the dashed marker
   const obstacles = [...P.values()].filter(r => !rel.has(r.k) && r.k !== 'spec')
     .map(r => { const [w, h] = half(r.t); return [r.x - w - 4, r.x + w + 4, r.y - h - 4, r.y + h + 4]; });
+  const depth = clearDepth(from, to, [...rel.values()], obstacles);
+  return {R:route(from, to, depth), rel, to};
+}
+// the shallowest under-route along which a constituent (its nodes `body`, relative to its root) clears every obstacle box
+function clearDepth(from, to, body, obstacles){
   const clear = R => {
     for (let t = .04; t < .97; t += .02){
       const b = bez(R, ease(t));
-      for (const r of rel.values()){
+      for (const r of body){
         const [w, h] = half(r.t), x = b.x + r.x, y = b.y + r.y;
         for (const o of obstacles) if (x - w < o[1] && o[0] < x + w && y - h < o[3] && o[2] < y + h) return false;
       }
     }
     return true;
   };
-  let R; for (let depth = 50; depth <= 700; depth += 12){ R = route(from, to, depth); if (clear(R)) break; }
-  return {R, rel, to};
+  let depth = 50; while (depth < 700 && !clear(route(from, to, depth))) depth += 12;
+  return depth;
 }
 
 /* Camera: the viewBox eases toward whatever needs to be on screen. */
@@ -796,15 +803,16 @@ function render(now){
   drawMini();
   let html = '';
   // optional: every movement chain, drawn along the same under-route the flight used
-  if (showPaths) chains.forEach((m, i) => {
-    const later = chains.slice(i + 1).find(b => b.item === m.item);
-    const A = live.get('t'+m.n), B = live.get(later ? 't'+later.n : m.item);
-    if (!A || !B || A.dead || B.dead) return;
-    const from = {x:A.x, y:A.y + 11}, to = {x:B.x, y:B.y + 10};
-    const R = route(from, to, 46 + Math.abs(from.x - to.x)*.12);
-    const op = Math.min(A.o, B.o)*.8, c = ITEMC[m.item];
+  if (showPaths) chains.forEach(m => {
+    const A = live.get('t' + m.n), B = live.get(m.to);
+    if (!A || !B || A.dead || B.dead || m.depth === undefined) return;
+    // the flight's own curve (node centre to node centre), drawn from just below the trace to just below the landed phrase:
+    // both ends of the curve are vertical, so trimming them along that line keeps the shape
+    const R = route({x:A.x, y:A.y}, {x:B.x, y:B.y}, m.depth);
+    R.p0 = {x:A.x, y:A.y + half(A.t)[1] + 2}; R.p3 = {x:B.x, y:B.y + half(B.t)[1] + 3};
+    const op = Math.min(A.o, B.o)*.8, c = ITEMC[m.item], to = R.p3;
     html += `<path class="chain" d="${routeD(R)}" style="stroke:${c};opacity:${op}"/>
-      <circle cx="${from.x}" cy="${from.y}" r="2.2" style="fill:${c};opacity:${op}"/>
+      <circle cx="${R.p0.x}" cy="${R.p0.y}" r="2.2" style="fill:${c};opacity:${op}"/>
       <path class="chain-h" d="M${to.x-4} ${to.y+6} L${to.x} ${to.y} L${to.x+4} ${to.y+6}" style="stroke:${c};opacity:${op}"/>`;
   });
   // fading trail behind the constituent in flight
@@ -861,7 +869,15 @@ function setRow(order){
 let def, states = [], cur = 0, speed = 1, playing = false, token = 0;
 const wait = ms => new Promise(r => vwaits.push({t:vnow + ms, r}));
 
-function setChainsUpTo(i){ chains = states.slice(1, i + 1).filter(s => s.move).map(s => s.move); }
+/* Movement paths shown with "Paths": each one is the curve its flight took (same depth, same vertical
+   ends), from the trace to where the phrase went; only the end points follow the tree as it re-forms. */
+function setChainsUpTo(i){
+  chains = states.slice(1, i + 1).filter(s => s.move).map(s => ({...s.move}));
+  chains.forEach((m, j) => {
+    const later = chains.slice(j + 1).find(b => b.item === m.item);
+    m.to = later ? 't' + later.n : m.item; // a phrase moved again: this leg ends at its next trace
+  });
+}
 
 function updateUI(){
   const s = states[cur];
@@ -952,7 +968,7 @@ async function stepForward(my){
   if (my !== token) return false;
   // 3. move it along a curve under the crossed material into the open Spec; nothing else moves
   const lay = layout(next.tree), it = lay.get(item);
-  const {R, rel, to} = planFlight(preLay, lay, item);
+  const {R, rel, to} = planFlight(preLay, lay, item); // (same depth as next.move.depth: the layouts differ only by a shift)
   const scene = new Map();
   for (const [k, r] of lay){
     const p = rel.has(k) ? {x:to.x + rel.get(k).x, y:to.y + rel.get(k).y}
