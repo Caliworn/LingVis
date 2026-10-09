@@ -110,11 +110,23 @@ button{font:inherit;color:inherit}
   .stage-svg{flex:none;aspect-ratio:var(--ar,700/420);height:auto;max-height:44vh}
 }
 
-.caption{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:start;padding:9px 12px;border-radius:12px;background:var(--surface-2);min-height:54px}
+.caption{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:start;padding:9px 12px;border-radius:12px;background:var(--surface-2);min-height:54px}
 .caption .num{font:600 11px 'JetBrains Mono',monospace;background:var(--ink);color:var(--surface);border-radius:7px;padding:3px 7px;margin-top:1px}
 .caption .tt{font-weight:600;font-size:13.5px}
 .caption .tx{color:var(--muted);font-size:13px}
 .caption.badc .num{background:var(--bad)}
+.caption .more{display:none}
+/* portrait: the caption keeps one height (number + title); the explanation opens on tap, over the tree */
+@media (max-aspect-ratio:1/1), (max-width:700px){
+  .caption{position:relative;height:60px;min-height:0;align-items:center;cursor:pointer;-webkit-user-select:none;user-select:none}
+  .caption .tt{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.35}
+  .caption .tx{display:none;position:absolute;left:0;right:0;bottom:calc(100% + 6px);z-index:5;padding:10px 12px;border-radius:12px;
+    background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);color:var(--ink);cursor:auto;-webkit-user-select:text;user-select:text}
+  .caption.open .tx{display:block}
+  .caption .more{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--muted)}
+  .caption .more svg{width:12px;height:12px;transition:transform .2s}
+  .caption.open .more svg{transform:rotate(180deg)}
+}
 
 .st-foot{display:flex;align-items:center;gap:14px;margin-top:10px;flex-wrap:wrap}
 .surface{flex:1;min-width:240px;display:flex;align-items:center;gap:10px}
@@ -146,6 +158,10 @@ button{font:inherit;color:inherit}
 }
 @media (max-width:480px){.dots{display:none}.btn.primary{flex:1}}
 
+/* fast clicking must not select text or zoom the page */
+.stage-svg,.st-foot,.tabs,.toggle,.or,ol.steps .n{-webkit-user-select:none;user-select:none}
+.stage-svg,.btn,.dots button,.seg button,.tabs button,.toggle,.caption{touch-action:manipulation}
+
 /* ================= svg tree ================= */
 .lbl{font:600 12.5px 'JetBrains Mono',monospace;fill:var(--muted)}
 .lbl.lex{font-size:12.5px}
@@ -168,8 +184,37 @@ button{font:inherit;color:inherit}
 .toggle.on{color:var(--ink);border-color:var(--ink)}
 .toggle.on::before{background:currentColor}
 .halo{stroke-width:1.5}
+.mini-bg{fill:var(--surface);stroke:var(--line);opacity:.92}
+.mini-e{stroke:var(--faint)}
+.mini-cam{fill:color-mix(in srgb,var(--ink) 6%,transparent);stroke:var(--ink)}
 .xfade text{animation:xf var(--fd,300ms) ease both}
 @keyframes xf{from{opacity:0}}
+
+/* ================= phone landscape ================= */
+@media (min-aspect-ratio:1/1) and (max-height:500px){
+  body{overflow-y:auto}
+  .app{height:auto;grid-template-columns:minmax(0,1fr);grid-template-rows:auto calc(100dvh - 58px) auto auto;
+    grid-template-areas:"head" "stage" "tabs" "pane";gap:8px;padding:8px 12px 12px}
+  #paneOrders,#paneSteps{grid-area:pane;height:calc(100dvh - 70px)}
+  .brand h1{font-size:18px}
+  .theme-btn{width:28px;height:28px}
+  .stage-card{display:grid;grid-template-columns:minmax(0,1fr) 320px;grid-template-rows:auto minmax(0,1fr) auto;column-gap:14px;
+    grid-template-areas:"svg top" "svg cap" "svg foot";padding:10px 12px}
+  .st-top{grid-area:top;gap:8px;min-height:0}
+  .order{font-size:20px}
+  .stage-svg{grid-area:svg;height:100%;max-height:none;aspect-ratio:auto;margin:0}
+  /* the side column has room: the full explanation shows inline (the controls stay pinned at the bottom) */
+  .caption{grid-area:cap;align-self:start;height:auto;max-height:100%;overflow:auto;margin-top:8px;cursor:auto;-webkit-user-select:text;user-select:text}
+  .caption .tt{display:block;-webkit-line-clamp:none;overflow:visible}
+  .caption .tx{display:block;position:static;padding:0;border:0;border-radius:0;background:none;box-shadow:none;color:var(--muted)}
+  .caption .more{display:none}
+  .st-foot{grid-area:foot;margin-top:8px}
+  .surface{min-width:100%}
+  .controls{width:100%;justify-content:space-between}
+  .dots{display:none}
+  .controls{gap:5px}
+  .btn.primary{min-width:64px;flex:1}
+}
 
 /* ================= panes ================= */
 .pane{display:flex;flex-direction:column;overflow:hidden;padding:14px 14px 10px}
@@ -190,6 +235,7 @@ button{font:inherit;color:inherit}
 .or .fq{font-size:10.5px;color:var(--muted);text-align:right;white-space:nowrap}
 .or .fq.hi{color:var(--ink);font-weight:600}
 .tbl-note{font-size:11px;color:var(--muted);margin-top:4px}
+@media (max-aspect-ratio:1/1), (max-width:700px), (max-height:500px){.tbl-note{display:none}}
 
 /* steps */
 .summary{border-radius:12px;padding:10px 12px;margin-bottom:10px;background:var(--surface-2);font-size:12.5px}
@@ -240,9 +286,9 @@ ol.steps li.cur .tx{display:block}
       <span id="status"></span>
     </div>
     <svg class="stage-svg" id="svg" viewBox="0 0 700 420" preserveAspectRatio="xMidYMid meet" aria-label="Derivation tree">
-      <g id="gArrows"></g><g id="gHalo"></g><g id="gEdges"></g><g id="gNodes"></g>
+      <g id="gArrows"></g><g id="gHalo"></g><g id="gEdges"></g><g id="gNodes"></g><g id="gMini" aria-hidden="true"></g>
     </svg>
-    <div class="caption" id="caption"><span class="num" id="capN"></span><div><div class="tt" id="capT"></div><div class="tx" id="capX"></div></div></div>
+    <div class="caption" id="caption"><span class="num" id="capN"></span><div><div class="tt" id="capT"></div><div class="tx" id="capX"></div></div><span class="more" aria-hidden="true"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 7.5 3-3 3 3"/></svg></span></div>
     <div class="st-foot">
       <div class="surface"><span class="lb" id="surfLb">Linear order</span><div class="row" id="row"></div></div>
       <div class="controls">
@@ -457,8 +503,20 @@ function buildStates(def){
 /* =====================================================================
    LAYOUT
    ===================================================================== */
-const VW = 700, VH = 600, BASE = 500, LH = 36, GAP = 6;
-const LW = {chip:68, head:36, trace:24, slot:30};
+const VW = 700, VH = 600, BASE = 500;
+let LH = 36, GAP = 6;
+const LW = {}, HALF = {};
+/* Narrow screens (portrait phones) get a compact tree: small chips without the gloss, tighter rows */
+const NARROW = matchMedia('(max-aspect-ratio:1/1), (max-width:700px), (max-height:500px)');
+let compact = false, CH = [32, 20]; // chip half-width, half-height
+function setGeometry(c){
+  compact = c;
+  CH = c ? [20, 14] : [32, 20];
+  LH = c ? 32 : 36; GAP = c ? 4 : 6;
+  Object.assign(LW, c ? {chip:44, head:32, trace:22, slot:26} : {chip:68, head:36, trace:24, slot:30});
+  Object.assign(HALF, {chip:CH, head:[16,8], trace:[11,9], slot:[12,12]});
+}
+setGeometry(NARROW.matches);
 function layout(tree){
   const out = new Map(); let x = 0, D = 0;
   (function walk(n, depth, parent){
@@ -492,15 +550,17 @@ function labelHTML(n){
   if (n.idx) s += `<tspan class="sub" dy="3">${n.idx}</tspan>`;
   return s;
 }
-function topOff(t){ return t === 'chip' ? 20 : 8; } // the landing marker's top is aligned with a label's, so its branch matches exactly
+function topOff(t){ return t === 'chip' ? CH[1] : 8; } // the landing marker's top is aligned with a label's, so its branch matches exactly
 
 function drawNode(rec){
   const n = rec.n, g = document.createElementNS(NS, 'g');
   if (n.t === 'chip'){
-    g.innerHTML = `<rect class="chip-r" x="-32" y="-20" width="64" height="40" rx="10" style="fill:${CAT[n.cat].c}"/>
-      <text class="chip-t" text-anchor="middle" y="-1">${n.cat}</text>
-      <text class="chip-g" text-anchor="middle" y="13">${CAT[n.cat].g}</text>` +
-      (n.bad ? `<rect class="bad-r" x="-35" y="-23" width="70" height="46" rx="12"/><circle class="bad-x" cx="32" cy="-20" r="8"/><path d="M29 -23l6 6M35 -23l-6 6" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/>` : '');
+    const [w, h] = CH;
+    g.innerHTML = `<rect class="chip-r" x="${-w}" y="${-h}" width="${2*w}" height="${2*h}" rx="${compact ? 8 : 10}" style="fill:${CAT[n.cat].c}"/>` +
+      (compact ? `<text class="chip-t" text-anchor="middle" dominant-baseline="central" y="1">${n.cat}</text>`
+               : `<text class="chip-t" text-anchor="middle" y="-1">${n.cat}</text>
+      <text class="chip-g" text-anchor="middle" y="13">${CAT[n.cat].g}</text>`) +
+      (n.bad ? `<rect class="bad-r" x="${-w-3}" y="${-h-3}" width="${2*w+6}" height="${2*h+6}" rx="12"/><circle class="bad-x" cx="${w}" cy="${-h}" r="8"/><path d="M${w-3} ${-h-3}l6 6M${w+3} ${-h-3}l-6 6" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/>` : '');
   } else if (n.t === 'trace'){
     g.innerHTML = `<text class="tr" text-anchor="middle" dominant-baseline="central" style="fill:${ITEMC[n.of]}">t<tspan class="sub" dy="4">${n.idx}</tspan></text>`;
   } else if (n.t === 'slot'){
@@ -588,7 +648,6 @@ function bez(R, t){
   return {x:a*R.p0.x + b*R.p1.x + c*R.p2.x + d*R.p3.x, y:a*R.p0.y + b*R.p1.y + c*R.p2.y + d*R.p3.y};
 }
 const routeD = R => `M${R.p0.x} ${R.p0.y} C${R.p1.x} ${R.p1.y} ${R.p2.x} ${R.p2.y} ${R.p3.x} ${R.p3.y}`;
-const HALF = {chip:[32,20], head:[16,8], trace:[11,9], slot:[12,12]};
 const half = t => HALF[t] || [18,9];
 
 /* Plan a move while the rest of the tree stands still:
@@ -621,12 +680,41 @@ function boundsOf(recs){
   for (const r of recs){ const [w, h] = half(r.t); x0 = Math.min(x0, r.x - w); x1 = Math.max(x1, r.x + w); y0 = Math.min(y0, r.y - h); y1 = Math.max(y1, r.y + h); }
   return {x0, x1, y0, y1};
 }
-function camTo(b, dur){
-  const pad = 18, w = Math.max(b.x1 - b.x0 + 2*pad, 480), h = Math.max(b.y1 - b.y0 + 2*pad, 240);
-  const target = {x:(b.x0 + b.x1)/2 - w/2, y:(b.y0 + b.y1)/2 - h/2, w, h};
+/* On narrow screens the camera shows the whole tree only while it stays readable (on-screen scale ≥ READ).
+   Once the tree outgrows that, it frames `focus` — where the current step happens — at reading size,
+   and a minimap in the corner shows where that view sits in the whole tree. */
+const READ = .9, ZOOM_MAX = 1.3;
+let camFull = null; // the whole tree's padded box (the minimap's frame)
+function camTo(b, dur, focus){
+  const pad = 18;
+  let w = b.x1 - b.x0 + 2*pad, h = b.y1 - b.y0 + 2*pad, cx = (b.x0 + b.x1)/2, cy = (b.y0 + b.y1)/2;
+  if (!compact){ w = Math.max(w, 480); h = Math.max(h, 240); camFull = null; }
+  else {
+    const r = svgEl.getBoundingClientRect(), ew = r.width || 1, eh = r.height || 1, ar = ew/eh;
+    const fit = (W, H) => W/H > ar ? [W, W/ar] : [H*ar, H]; // grow to the box's shape, so scale = ew/w
+    [w, h] = fit(Math.max(w, ew/ZOOM_MAX), Math.max(h, eh/ZOOM_MAX));
+    camFull = {x:cx - w/2, y:cy - h/2, w, h};
+    if (focus && ew/w < READ){
+      const [fw, fh] = fit(Math.max(focus.x1 - focus.x0 + 2*pad, ew/READ), Math.max(focus.y1 - focus.y0 + 2*pad, eh/READ));
+      const clamp = (v, lo, hi) => lo > hi ? (lo + hi)/2 : Math.min(hi, Math.max(lo, v));
+      // stay inside the tree: no empty margins beyond its edges
+      cx = clamp((focus.x0 + focus.x1)/2, camFull.x + fw/2, camFull.x + w - fw/2);
+      cy = clamp((focus.y0 + focus.y1)/2, camFull.y + fh/2, camFull.y + h - fh/2);
+      w = fw; h = fh;
+    }
+  }
+  const target = {x:cx - w/2, y:cy - h/2, w, h};
   if (!cam || !dur){ cam = target; camTw = null; return; }
   camTw = {from:{...cam}, to:target, start:vnow, dur};
 }
+// the nodes a step adds (or names), with their mothers and daughters: what the camera should frame
+const fresh = L => [...L.keys()].filter(k => !live.has(k) || live.get(k).dead);
+function around(L, keys){
+  const s = new Set(keys);
+  for (const k of keys){ const r = L.get(k); if (!r) continue; if (r.parent) s.add(r.parent); if (r.n.kids) r.n.kids.forEach(c => s.add(c.k)); }
+  return boundsOf([...s].map(k => L.get(k)).filter(Boolean));
+}
+const topOf = L => boundsOf([...L.values()].filter(r => r.depth <= 2)); // the newest layer sits on top
 
 let chains = [];      // moves made so far: {n, item, crossed}
 let trail = null;     // the route of the move in progress: {R, color, start, dur, fade}
@@ -693,11 +781,12 @@ function render(now){
   if (ho > 0.01 && halo.keys){
     let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
     for (const k of halo.keys){ const n = live.get(k); if (!n || n.dead) continue;
-      const w = n.t === 'chip' ? 34 : 18, h = n.t === 'chip' ? 22 : 11;
+      const w = n.t === 'chip' ? CH[0] + 2 : 18, h = n.t === 'chip' ? CH[1] + 2 : 11;
       x0 = Math.min(x0, n.x - w); x1 = Math.max(x1, n.x + w); y0 = Math.min(y0, n.y - h); y1 = Math.max(y1, n.y + h); }
     gH.innerHTML = x0 < 1e9 ? `<rect class="halo" x="${x0-7}" y="${y0-6}" width="${x1-x0+14}" height="${y1-y0+12}" rx="14"
       style="fill:color-mix(in srgb, ${halo.color} 12%, transparent);stroke:${halo.color};opacity:${ho}"/>` : '';
   } else gH.innerHTML = '';
+  drawMini();
   let html = '';
   // optional: every movement chain, drawn along the same under-route the flight used
   if (showPaths) chains.forEach((m, i) => {
@@ -721,6 +810,25 @@ function render(now){
   gA.innerHTML = html;
 }
 requestAnimationFrame(frame);
+
+// minimap (narrow screens, while the camera shows only part of the tree): fixed on-screen size, top right
+const gM = $('gMini');
+function drawMini(){
+  const F = camFull, show = compact && F && cam && (cam.w < F.w*.95 || cam.h < F.h*.95);
+  if (!show){ if (gM.innerHTML) gM.innerHTML = ''; return; }
+  const er = svgEl.getBoundingClientRect(), px = Math.max(cam.w/(er.width || 1), cam.h/(er.height || 1)); // view units per screen pixel ('meet')
+  const mw = 64*px, k = mw / F.w, mh = F.h*k, m = 8*px;
+  const ox = cam.x + cam.w - mw - m, oy = cam.y + m;
+  const X = x => ox + (x - F.x)*k, Y = y => oy + (y - F.y)*k;
+  let h = `<rect class="mini-bg" x="${ox - 3*px}" y="${oy - 3*px}" width="${mw + 6*px}" height="${mh + 6*px}" rx="${6*px}" style="stroke-width:${px}"/>`;
+  for (const n of live.values()){
+    const P = n.parent && live.get(n.parent);
+    if (P && n.o > .05) h += `<line class="mini-e" x1="${X(P.x)}" y1="${Y(P.y)}" x2="${X(n.x)}" y2="${Y(n.y)}" style="stroke-width:${px};opacity:${Math.min(n.o, P.o)}"/>`;
+    if (n.t === 'chip' && n.o > .05) h += `<circle cx="${X(n.x)}" cy="${Y(n.y)}" r="${2.2*px}" style="fill:${CAT[n.n.cat].c};opacity:${n.o}"/>`;
+  }
+  h += `<rect class="mini-cam" x="${X(cam.x)}" y="${Y(cam.y)}" width="${cam.w*k}" height="${cam.h*k}" rx="${2*px}" style="stroke-width:${1.3*px}"/>`;
+  gM.innerHTML = h;
+}
 
 /* =====================================================================
    SURFACE ORDER ROW
@@ -756,7 +864,13 @@ function updateUI(){
   $('caption').classList.toggle('badc', !!s.bad);
   [...$('steps').children].forEach((li, i) => { li.classList.toggle('cur', i === cur); li.classList.toggle('done', i < cur); });
   const curLi = $('steps').children[cur];
-  if (curLi) curLi.scrollIntoView({block:'nearest', behavior:'smooth'});
+  // keep the current step in view by scrolling the list only (scrollIntoView would also scroll the page)
+  const sc = curLi && curLi.closest('.scroll');
+  if (sc){
+    const r = curLi.getBoundingClientRect(), b = sc.getBoundingClientRect();
+    if (r.top < b.top) sc.scrollBy({top:r.top - b.top - 4, behavior:'smooth'});
+    else if (r.bottom > b.bottom) sc.scrollBy({top:r.bottom - b.bottom + 4, behavior:'smooth'});
+  }
   [...$('dots').children].forEach((d, i) => { d.classList.toggle('cur', i === cur); d.classList.toggle('done', i < cur); });
   $('prevBtn').disabled = cur === 0;
   $('nextBtn').disabled = cur >= states.length - 1;
@@ -782,7 +896,7 @@ function jump(i, dur = 550){
   haloTo(null, null, 0, 150);
   trail = null;
   const L = anchorTo(layout(states[cur].tree), states[cur].tree.k);
-  camTo(boundsOf(L.values()), dur);
+  camTo(boundsOf(L.values()), dur, cur === states.length - 1 ? null : topOf(L));
   setScene(L, {dur});
   setChainsUpTo(cur);
   setRow(lin(states[cur].tree));
@@ -802,16 +916,16 @@ async function stepForward(my){
       const dx = old.x - bar.x, dy = old.y - bar.y;
       for (const r of L.values()){ r.x += dx; r.y += dy; }
       const d = 1000/speed;
-      camTo(boundsOf(L.values()), d);
+      camTo(boundsOf(L.values()), d, around(L, fresh(L)));
       await setScene(L, {dur:d, inPlace:true, crossfade:K + 'b', reappear:K, lateNew:.55});
       setRow(lin(next.tree));
-      return my === token;
+      return settle(L, my);
     }
     const L = anchorTo(layout(next.tree), prevRoot);
-    camTo(boundsOf(L.values()), 700/speed);
+    camTo(boundsOf(L.values()), 700/speed, around(L, fresh(L)));
     await setScene(L, {dur:700/speed, inPlace:true});
     setRow(lin(next.tree));
-    return my === token;
+    return settle(L, my);
   }
   // 1. Internal Merge begins: Agr′ appears and room opens for the Spec (dashed marker = landing site)
   cur++; updateUI();
@@ -821,7 +935,7 @@ async function stepForward(my){
   const dx = oldTop.x - bar.x, dy = oldTop.y - bar.y;
   for (const r of preLay.values()){ r.x += dx; r.y += dy; }
   const growDur = 1000/speed;
-  camTo(boundsOf(preLay.values()), growDur);
+  camTo(boundsOf(preLay.values()), growDur, around(preLay, fresh(preLay)));
   await setScene(preLay, {dur:growDur, inPlace:true, crossfade:A + 'b', reappear:A, lateNew:.55});
   if (my !== token) return false;
   // 2. highlight the constituent that will move
@@ -842,7 +956,7 @@ async function stepForward(my){
   // keep the whole flight on screen
   const flightBox = [];
   for (let t = 0; t <= 1; t += .05){ const b = bez(R, t); for (const r of rel.values()) flightBox.push({t:r.t, x:b.x + r.x, y:b.y + r.y}); }
-  camTo(boundsOf([...preLay.values(), ...flightBox]), dur*.45);
+  camTo(boundsOf([...preLay.values(), ...flightBox]), dur*.45, boundsOf([...flightBox, preLay.get(A), preLay.get(item)]));
   trail = {R, color:ITEMC[item], start:vnow, dur};
   await setScene(scene, {dur, moved:it.desc, route:R, fadeLate:true});
   if (trail) trail.fade = vnow;
@@ -854,8 +968,13 @@ async function stepForward(my){
   await wait(250/speed);
   if (my !== token) return false;
   anchorTo(lay, item); // the phrase that just landed stays put while the rest closes up
-  camTo(boundsOf(lay.values()), 800/speed);
+  camTo(boundsOf(lay.values()), 800/speed, around(lay, [A, ...(lay.get(item).desc || [item])]));
   await setScene(lay, {dur:800/speed});
+  return settle(lay, my);
+}
+// after the last step, narrow screens pull back to show the finished tree whole
+function settle(L, my){
+  if (my === token && compact && cur === states.length - 1) camTo(boundsOf(L.values()), 900/speed);
   return my === token;
 }
 async function play(){
@@ -875,7 +994,8 @@ function stop(){ token++; playing = false; busy = false; rate = 1; }
 function fitView(){
   const b = boundsOf(layout(states.at(-1).tree).values());
   const w = Math.max(b.x1 - b.x0 + 36, 480), h = Math.max(b.y1 - b.y0 + 36, 240);
-  svgEl.style.setProperty('--ar', `${w} / ${h}`);
+  // narrow screens: a squarer box, since the camera frames parts of the tree at reading size anyway
+  svgEl.style.setProperty('--ar', compact ? `${Math.min(w/h, 1.15)} / 1` : `${w} / ${h}`);
   cam = null;
 }
 
@@ -956,6 +1076,36 @@ async function advance(){
 }
 $('nextBtn').onclick = advance;
 $('prevBtn').onclick = () => { stop(); jump(cur - 1); };
+// crossing the narrow/wide threshold redraws the tree in the other geometry at the same step
+function regeometry(){
+  if (NARROW.matches === compact) return;
+  setGeometry(NARROW.matches);
+  if (!def) return;
+  const at = cur, was = playing;
+  stop();
+  states = buildStates(def); // slot widths depend on the geometry
+  fitView();
+  for (const n of live.values()){ n.g.remove(); n.edge.remove(); }
+  live.clear(); trail = null; halo = null;
+  jump(at, 0);
+  if (was) play();
+}
+NARROW.addEventListener('change', regeometry);
+// portrait: tap the caption to open or close the explanation (it stays open across steps until closed)
+const CAPQ = matchMedia('(max-aspect-ratio:1/1), (max-width:700px)'), SHORT = matchMedia('(min-aspect-ratio:1/1) and (max-height:500px)');
+const capFolds = () => CAPQ.matches && !SHORT.matches; // only the portrait caption folds; phone landscape and desktop show it whole
+function syncCaption(){
+  const c = $('caption');
+  if (capFolds()) c.title = c.classList.contains('open') ? 'Hide the explanation' : 'Show the explanation';
+  else c.removeAttribute('title');
+}
+$('caption').addEventListener('click', e => {
+  if (!capFolds() || e.target.closest('.tx')) return;
+  $('caption').classList.toggle('open'); syncCaption();
+});
+addEventListener('resize', syncCaption);
+syncCaption();
+addEventListener('resize', regeometry); // some browsers skip the media query's change event
 svgEl.addEventListener('click', e => { if (e.button === 0) advance(); }); // click the derivation to advance
 $('pathsBtn').onclick = () => { showPaths = !showPaths; $('pathsBtn').classList.toggle('on', showPaths); };
 $('resetBtn').onclick = () => { stop(); jump(0); };
