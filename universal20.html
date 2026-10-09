@@ -1,0 +1,979 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<script>
+/* LingVis shared theme: same block in every page. Applies the saved choice before first paint,
+   persists toggles, and follows changes made in other open LingVis tabs. No saved choice = follow the system. */
+(() => {
+  const KEY = 'lingvis-theme', root = document.documentElement;
+  const apply = t => { if (t === 'light' || t === 'dark') root.dataset.theme = t; else delete root.dataset.theme; };
+  try { apply(localStorage.getItem(KEY)); } catch (e) {}
+  window.lingvisToggleTheme = () => {
+    const dark = root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+    const next = dark ? 'light' : 'dark';
+    apply(next);
+    try { localStorage.setItem(KEY, next); } catch (e) {}
+  };
+  addEventListener('storage', e => { if (e.key === KEY) apply(e.newValue); });
+})();
+</script>
+<title>Universal 20</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f4f1ea; --surface:#fffdf8; --surface-2:#efebe2; --ink:#1c1a21; --muted:#6d6876; --faint:#a9a3b0; --line:#e0d9cc;
+  --dem:#6a55d6; --num:#c27a00; --a:#0f8a73; --n:#d9443a; --good:#1f8a4c; --bad:#c2332b;
+  --shadow:0 1px 2px rgba(30,20,10,.05),0 6px 20px rgba(30,20,10,.06);
+  --ease:cubic-bezier(.65,0,.25,1);
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#121116; --surface:#1b1a20; --surface-2:#25232b; --ink:#f1eee8; --muted:#a39eac; --faint:#6a6572; --line:#322f39;
+    --dem:#8571f0; --num:#d38f12; --a:#16a588; --n:#e8594c; --good:#3cbf73; --bad:#ef5a50;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.25); color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#121116; --surface:#1b1a20; --surface-2:#25232b; --ink:#f1eee8; --muted:#a39eac; --faint:#6a6572; --line:#322f39;
+  --dem:#8571f0; --num:#d38f12; --a:#16a588; --n:#e8594c; --good:#3cbf73; --bad:#ef5a50;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.25); color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font:14px/1.45 Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow:hidden}
+button{font:inherit;color:inherit}
+.mono{font-family:'JetBrains Mono',ui-monospace,monospace}
+
+/* ================= app shell ================= */
+.app{height:100vh;height:100dvh;display:grid;gap:12px;padding:12px 14px 14px;
+  grid-template-columns:250px minmax(0,1fr) 318px;grid-template-rows:auto minmax(0,1fr);
+  grid-template-areas:"head head head" "orders stage steps"}
+.head{grid-area:head}
+.stage-card{grid-area:stage}
+#paneOrders{grid-area:orders}
+#paneSteps{grid-area:steps}
+.tabs{grid-area:tabs;display:none}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);min-height:0}
+
+/* medium landscape: stage + tabbed side panel */
+@media (max-width:1180px) and (min-aspect-ratio:1/1){
+  .app{grid-template-columns:minmax(0,1fr) 310px;grid-template-rows:auto auto minmax(0,1fr);
+    grid-template-areas:"head head" "stage tabs" "stage pane"}
+  #paneOrders,#paneSteps{grid-area:pane}
+  .tabs{display:flex}
+  .app[data-tab="orders"] #paneSteps,.app[data-tab="steps"] #paneOrders{display:none}
+}
+/* portrait / narrow: stacked */
+@media (max-aspect-ratio:1/1), (max-width:700px){
+  .app{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto minmax(0,1fr);
+    grid-template-areas:"head" "stage" "tabs" "pane";gap:8px;padding:8px 10px 10px}
+  #paneOrders,#paneSteps{grid-area:pane}
+  .tabs{display:flex}
+  .app[data-tab="orders"] #paneSteps,.app[data-tab="steps"] #paneOrders{display:none}
+}
+
+/* ================= header ================= */
+.head{display:flex;align-items:center;gap:18px;min-width:0}
+.crumb{color:var(--muted);text-decoration:none;font-weight:500;transition:color .2s}
+.crumb:hover{color:var(--ink);text-decoration:underline;text-decoration-thickness:1.5px;text-underline-offset:4px}
+.sep{color:var(--faint);font-weight:400;margin:0 .32em}
+.brand{display:flex;align-items:baseline;gap:12px;min-width:0}
+.brand h1{margin:0;font:700 26px/1 Fraunces,Georgia,serif;letter-spacing:-.02em;white-space:nowrap}
+.brand h1 em{font-style:normal;background:linear-gradient(90deg,var(--dem),var(--num),var(--a),var(--n));-webkit-background-clip:text;background-clip:text;color:transparent}
+.brand p{margin:0;color:var(--muted);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.theme-btn{border:1px solid var(--line);background:var(--surface);border-radius:999px;width:32px;height:32px;cursor:pointer;flex:none;display:grid;place-items:center;margin-left:auto}
+@media (max-aspect-ratio:1/1), (max-width:700px){.brand p{display:none}.brand h1{font-size:22px}}
+
+/* ================= tabs ================= */
+.tabs{background:var(--surface-2);border-radius:12px;padding:3px;gap:3px}
+.tabs button{flex:1;border:0;background:transparent;border-radius:9px;padding:7px 0;font-weight:600;font-size:13px;color:var(--muted);cursor:pointer}
+.tabs button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+
+/* ================= stage card ================= */
+.stage-card{display:flex;flex-direction:column;padding:14px 16px 12px;overflow:hidden}
+.st-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;min-height:38px}
+.order{font:600 28px/1 Fraunces,Georgia,serif;display:flex;gap:9px;letter-spacing:-.01em}
+.pill{display:inline-flex;align-items:center;gap:6px;font:600 12px Inter;padding:4px 10px;border-radius:999px;white-space:nowrap}
+.pill.ok{color:var(--good);background:color-mix(in srgb,var(--good) 12%,transparent)}
+.pill.no{color:var(--bad);background:color-mix(in srgb,var(--bad) 12%,transparent)}
+.pill .f{color:var(--muted);font-weight:500}
+.st-top .spacer{flex:1}
+.stage-svg{flex:1;min-height:0;width:100%;display:block;margin:4px 0;cursor:pointer;-webkit-tap-highlight-color:transparent}
+@media (max-aspect-ratio:1/1), (max-width:700px){
+  .stage-card{padding:10px 10px 10px}
+  .order{font-size:22px}
+  .stage-svg{flex:none;aspect-ratio:var(--ar,700/420);height:auto;max-height:44vh}
+}
+
+.caption{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:start;padding:9px 12px;border-radius:12px;background:var(--surface-2);min-height:54px}
+.caption .num{font:600 11px 'JetBrains Mono',monospace;background:var(--ink);color:var(--surface);border-radius:7px;padding:3px 7px;margin-top:1px}
+.caption .tt{font-weight:600;font-size:13.5px}
+.caption .tx{color:var(--muted);font-size:13px}
+.caption.badc .num{background:var(--bad)}
+
+.st-foot{display:flex;align-items:center;gap:14px;margin-top:10px;flex-wrap:wrap}
+.surface{flex:1;min-width:240px;display:flex;align-items:center;gap:10px}
+.surface .lb{font:600 10.5px Inter;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);width:62px;line-height:1.2}
+.row{position:relative;flex:1;height:38px;container-type:inline-size}
+@container (max-width:380px){.tile small{display:none}}
+.tile{position:absolute;top:0;height:38px;width:calc(25% - 5px);border-radius:10px;background:var(--c);color:#fff;display:flex;align-items:center;justify-content:center;gap:6px;font:700 14px Inter;transition:left .7s var(--ease),opacity .4s}
+.tile small{font-weight:500;font-size:11px;opacity:.85}
+.row.bad .tile{background:color-mix(in srgb,var(--c) 10%,transparent);color:var(--c);box-shadow:inset 0 0 0 1.5px var(--c)}
+.controls{display:flex;align-items:center;gap:6px}
+.btn{border:1px solid var(--line);background:var(--surface);height:34px;min-width:34px;padding:0 10px;border-radius:10px;font:600 12.5px Inter;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:background .2s,transform .1s}
+.btn:hover:not(:disabled){background:var(--surface-2)}
+.btn:active:not(:disabled){transform:scale(.95)}
+.btn:disabled{opacity:.35;cursor:default}
+.btn.primary{background:var(--ink);color:var(--surface);border-color:var(--ink);min-width:78px}
+.btn.primary:hover:not(:disabled){background:color-mix(in srgb,var(--ink) 82%,var(--surface))}
+.btn svg{width:14px;height:14px}
+.dots{display:flex;gap:4px;margin:0 4px}
+.dots button{width:9px;height:9px;border-radius:50%;border:0;background:var(--line);padding:0;cursor:pointer;transition:background .2s,transform .2s}
+.dots button.done{background:var(--faint)}
+.dots button.cur{background:var(--ink);transform:scale(1.3)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;height:34px}
+.seg button{border:0;background:transparent;color:var(--muted);font:600 11.5px Inter;padding:0 8px;cursor:pointer}
+.seg button.on{background:var(--surface-2);color:var(--ink)}
+@media (max-aspect-ratio:1/1), (max-width:700px){
+  .st-foot{gap:8px}
+  .surface{min-width:100%}
+  .controls{width:100%;justify-content:space-between}
+}
+@media (max-width:480px){.dots{display:none}.btn.primary{flex:1}}
+
+/* ================= svg tree ================= */
+.lbl{font:600 12.5px 'JetBrains Mono',monospace;fill:var(--muted)}
+.lbl.lex{font-size:12.5px}
+.hd{font:500 11.5px 'JetBrains Mono',monospace;fill:var(--faint)}
+.sub{font-size:9px}
+.edge{stroke:var(--faint);stroke-width:1.3}
+.chip-r{stroke:none}
+.chip-t{font:700 15px Inter;fill:#fff}
+.chip-g{font:500 10.5px Inter;fill:#fff;opacity:.85}
+.bad-r{fill:none;stroke:var(--bad);stroke-width:2.5}
+.bad-x{fill:var(--bad)}
+.tr{font:italic 600 16px Fraunces,Georgia,serif}
+.ph{fill:none;stroke-width:1.8;stroke-dasharray:4 3;animation:phg 1s ease-in-out infinite}
+@keyframes phg{50%{stroke-width:3.5;opacity:.6}}
+.trail{fill:none;stroke-width:3;stroke-linecap:round}
+.chain{fill:none;stroke-width:1.4;stroke-dasharray:2 4;stroke-linecap:round}
+.chain-h{fill:none;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
+.toggle{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:4px 11px;font:600 12px Inter;color:var(--muted);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.toggle::before{content:"";width:8px;height:8px;border-radius:50%;border:1.5px solid currentColor}
+.toggle.on{color:var(--ink);border-color:var(--ink)}
+.toggle.on::before{background:currentColor}
+.halo{stroke-width:1.5}
+.xfade text{animation:xf var(--fd,300ms) ease both}
+@keyframes xf{from{opacity:0}}
+
+/* ================= panes ================= */
+.pane{display:flex;flex-direction:column;overflow:hidden;padding:14px 14px 10px}
+.pane h3{margin:0 0 8px;font:600 10.5px Inter;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between;gap:8px}
+.scroll{overflow:auto;min-height:0;flex:1;margin:0 -6px;padding:0 6px}
+
+/* orders table */
+.block{display:flex;flex-direction:column;gap:2px;padding-bottom:6px;margin-bottom:6px;border-bottom:1px solid var(--line)}
+.block:last-child{border-bottom:0}
+.or{display:grid;grid-template-columns:12px minmax(0,1fr) 62px;gap:6px;align-items:center;border:0;background:transparent;border-radius:8px;padding:3px 5px;cursor:pointer;text-align:left}
+.or:hover{background:var(--surface-2)}
+.or.sel{background:var(--surface-2);box-shadow:inset 0 0 0 1.5px var(--ink)}
+.or .mk{font:700 11px Inter;text-align:center}
+.or .mk.ok{color:var(--good)} .or .mk.no{color:var(--bad)}
+.or .tk{display:flex;gap:3px}
+.or .tk span{flex:1;border-radius:5px;background:var(--c);color:#fff;font:600 10px/19px Inter;text-align:center}
+.or.un .tk span{background:transparent;color:var(--c);box-shadow:inset 0 0 0 1.2px color-mix(in srgb,var(--c) 55%,transparent)}
+.or .fq{font-size:10.5px;color:var(--muted);text-align:right;white-space:nowrap}
+.or .fq.hi{color:var(--ink);font-weight:600}
+.tbl-note{font-size:11px;color:var(--muted);margin-top:4px}
+
+/* steps */
+.summary{border-radius:12px;padding:10px 12px;margin-bottom:10px;background:var(--surface-2);font-size:12.5px}
+.summary .k{font:600 10.5px Inter;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+.tags{display:flex;flex-wrap:wrap;gap:4px}
+.tag{font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--surface);border:1px solid var(--line)}
+.tag.m{color:var(--num);border-color:color-mix(in srgb,var(--num) 40%,transparent)}
+.tag.u{color:var(--good);border-color:color-mix(in srgb,var(--good) 40%,transparent)}
+.summary.badbox{background:color-mix(in srgb,var(--bad) 9%,transparent);border:1px solid color-mix(in srgb,var(--bad) 28%,transparent)}
+.summary.badbox .k{color:var(--bad)}
+.summary .nt{color:var(--muted);margin-top:6px}
+ol.steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px}
+ol.steps li{display:grid;grid-template-columns:22px minmax(0,1fr);gap:9px;padding:7px 8px;border-radius:10px;cursor:pointer;opacity:.45;transition:opacity .25s,background .25s}
+ol.steps li.done{opacity:.8}
+ol.steps li.cur{opacity:1;background:var(--surface-2)}
+ol.steps .n{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font:600 10px 'JetBrains Mono',monospace;border:1px solid var(--line);background:var(--surface)}
+ol.steps li.cur .n{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+ol.steps .tt{font-weight:600;font-size:12.5px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+ol.steps .ty{font:600 9.5px Inter;letter-spacing:.06em;text-transform:uppercase;padding:1px 6px;border-radius:5px;background:var(--surface);border:1px solid var(--line);color:var(--muted)}
+ol.steps .ty.mv{color:#fff;border-color:transparent;background:var(--c)}
+ol.steps .ty.bd{color:#fff;border-color:transparent;background:var(--bad)}
+ol.steps .tx{color:var(--muted);font-size:12px;display:none;margin-top:2px}
+ol.steps li.cur .tx{display:block}
+.params{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);font-size:11.5px;color:var(--muted)}
+.params ul{margin:0;padding-left:16px;display:flex;flex-direction:column;gap:2px}
+.params .ph{font:600 10.5px Inter;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px}
+.params b{color:var(--ink);font-weight:600}
+.params .src{margin-top:8px;font-size:11px}
+</style>
+</head>
+<body>
+<div class="app" id="app" data-tab="steps">
+  <header class="head">
+    <div class="brand">
+      <h1><a class="crumb" href="index.html" title="Back to LingVis">LingVis</a><span class="sep" aria-hidden="true">/</span>Universal <em>20</em></h1>
+      <p>Cinque (2005) · Deriving Greenberg's Universal 20 and its exceptions</p>
+    </div>
+    <button class="theme-btn" id="themeBtn" title="Toggle theme" aria-label="Toggle theme">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="6"/><path d="M8 2a6 6 0 0 0 0 12z" fill="currentColor"/></svg>
+    </button>
+  </header>
+
+  <main class="card stage-card">
+    <div class="st-top">
+      <span class="order" id="order"></span>
+      <span class="spacer"></span>
+      <button class="toggle" id="pathsBtn" title="Show movement paths (P)">Paths</button>
+      <span id="status"></span>
+    </div>
+    <svg class="stage-svg" id="svg" viewBox="0 0 700 420" preserveAspectRatio="xMidYMid meet" aria-label="Derivation tree">
+      <g id="gArrows"></g><g id="gHalo"></g><g id="gEdges"></g><g id="gNodes"></g>
+    </svg>
+    <div class="caption" id="caption"><span class="num" id="capN"></span><div><div class="tt" id="capT"></div><div class="tx" id="capX"></div></div></div>
+    <div class="st-foot">
+      <div class="surface"><span class="lb" id="surfLb">Linear order</span><div class="row" id="row"></div></div>
+      <div class="controls">
+        <button class="btn" id="resetBtn" title="Restart (R)" aria-label="Restart"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2.5 8a5.5 5.5 0 1 0 1.7-4M2.5 2.5v3h3"/></svg></button>
+        <button class="btn" id="prevBtn" title="Previous (←)" aria-label="Previous step"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3 5 8l5 5"/></svg></button>
+        <button class="btn primary" id="playBtn" title="Play / pause (Space)">Play</button>
+        <button class="btn" id="nextBtn" title="Next (→)" aria-label="Next step"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 3 5 5-5 5"/></svg></button>
+        <div class="dots" id="dots"></div>
+        <div class="seg" id="speedSeg"><button data-s="0.6">0.5×</button><button data-s="1" class="on">1×</button><button data-s="1.8">2×</button></div>
+      </div>
+    </div>
+  </main>
+
+  <div class="tabs" id="tabs"><button data-t="steps" class="on">Derivation</button><button data-t="orders">24 orders</button></div>
+
+  <section class="card pane" id="paneOrders">
+    <h3><span>All 24 orders</span><span>✓ 14 · ✕ 10</span></h3>
+    <div class="scroll" id="table"></div>
+    <div class="tbl-note">Frequencies as reported by Cinque (2005).</div>
+  </section>
+
+  <section class="card pane" id="paneSteps">
+    <h3><span>Cyclic derivation</span><span id="stepCount"></span></h3>
+    <div class="scroll">
+      <div id="summary"></div>
+      <ol class="steps" id="steps"></ol>
+      <div class="params">
+        <div class="ph">Ways NP can move, from least to most marked</div>
+        <ul>
+          <li>No movement <b>(unmarked)</b></li>
+          <li>NP + <i>whose picture</i> pied-piping <b>(unmarked)</b></li>
+          <li>NP without pied-piping <b>(marked)</b></li>
+          <li>NP + <i>picture of who</i> pied-piping <b>(more marked still)</b></li>
+          <li><b>Total</b> (unmarked) vs. <b>partial</b> (marked) movement of NP, with or without pied-piping</li>
+          <li>No head movement; no movement of a phrase not containing NP</li>
+        </ul>
+        <div class="src">Cinque, G. 2005. Deriving Greenberg’s Universal 20 and its exceptions. <i>Linguistic Inquiry</i> 36(3): 315–332.</div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+/* =====================================================================
+   DATA — Cinque (2005), table (6), (7) and the discussion of (6a)–(6x)
+   ===================================================================== */
+const CAT = {Dem:{c:'var(--dem)', g:'these'}, Num:{c:'var(--num)', g:'three'}, A:{c:'var(--a)', g:'red'}, N:{c:'var(--n)', g:'books'}};
+const LV = [ // bottom-up layers of (7a): [WP Dem [XP Num [YP A [NP N]]]] with an Agr projection above each
+  {fp:'YP', h:'Y', agr:'AgryP', s:'y', exp:'A'},
+  {fp:'XP', h:'X', agr:'AgrxP', s:'x', exp:'Num'},
+  {fp:'WP', h:'W', agr:'AgrwP', s:'w', exp:'Dem'}
+];
+const IDX = {NP:'i', AgryP:'j', AgrxP:'k'};
+const ITEMC = {NP:'var(--n)', AgryP:'var(--a)', AgrxP:'var(--num)'};
+const UNI = ['Dem','Num','A'];
+
+// ops: which constituent moves into Spec,Agr at each layer (y, x, w)
+const ORDERS = [
+  ['a','Dem Num A N', 'very many', {}, []],
+  ['b','Dem Num N A', 'many',      {y:'NP'}, ['partial'], null, null, 'NP moves past A either with vacuous whose-picture pied-piping (unmarked) or without pied-piping (marked). Cinque counts the order as including the unmarked case, so only the partial movement is marked.'],
+  ['c','Dem N Num A', 'very few',  {y:'NP', x:'NP'}, ['partial','without pied-piping']],
+  ['d','N Dem Num A', 'few',       {y:'NP', x:'NP', w:'NP'}, ['without pied-piping']],
+  ['e','Num Dem A N', null, {}, null, ['Num','Dem','A'], 'NP has not moved, so the modifiers to its left show their Merge order directly — which would have to be Num > Dem > A.'],
+  ['f','Num Dem N A', null, {y:'NP'}, null, ['Num','Dem','A'], 'Raising NP without pied-piping implies the Merge order Num Dem A N. Raising it with picture-of-who pied-piping of [Dem N] or [Num Dem N] also implies a wrong Merge order.'],
+  ['g','Num N Dem A', null, {y:'NP', x:'NP'}, null, ['Num','Dem','A'], 'Raising NP without pied-piping implies the Merge order Num Dem A N. Whose-picture or picture-of-who pied-piping would likewise need a wrong Merge order (Num A Dem N, Dem A Num N).'],
+  ['h','N Num Dem A', null, {y:'NP', x:'NP', w:'NP'}, null, ['Num','Dem','A'], 'NP alone implies Num Dem A N; successive whose-picture pied-pipings imply A Dem Num N; NP raising followed by pied-piping implies A Num Dem N. Every route needs a wrong Merge order.'],
+  ['i','A Dem Num N', null, {}, null, ['A','Dem','Num'], 'NP has not moved, and the modifiers to its left are in the wrong Merge order.'],
+  ['j','A Dem N Num', null, {y:'NP'}, null, ['A','Dem','Num'], 'NP has moved one notch, but the two modifiers to its left are in the wrong Merge order. Picture-of-who alternatives presuppose A Num Dem N or Num A Dem N.'],
+  ['k','A N Dem Num', 'very few',  {x:'AgryP', w:'AgryP'}, ['picture of who (of A)','[A N] without pied-piping'], null, null, 'In his overview of movement types Cinque classes this order as partial movement, yet his count for it names only these two marked options.'],
+  ['l','N A Dem Num', 'few',       {y:'NP', x:'AgryP', w:'AgryP'}, ['[N A] without pied-piping']],
+  ['m','Dem A Num N', null, {}, null, ['Dem','A','Num'], 'NP has not moved, and the modifiers to its left are in the wrong Merge order (A above Num).'],
+  ['n','Dem A N Num', 'very few',  {x:'AgryP'}, ['partial','picture of who ([A N])']],
+  ['o','Dem N A Num', 'many',      {y:'NP', x:'AgryP'}, ['partial']],
+  ['p','N Dem A Num', 'very few',  {y:'NP', x:'AgryP', w:'NP'}, ['extraction of the sole NP'], null, null, 'If genuine, “especially marked” — Cinque gives no count. It could also arise from a single picture-of-who movement of [A N] past Num, followed by extraction of NP. Cinque suspects the order is spurious and that such extraction should be ruled out.'],
+  ['q','Num A Dem N', null, {}, null, ['Num','A','Dem'], 'NP has not moved, and the modifiers to its left are in the wrong Merge order.'],
+  ['r','Num A N Dem', 'very few',  {w:'AgrxP'}, ['partial','picture of who ([Num A N])']],
+  ['s','Num N A Dem', 'few',       {y:'NP', w:'AgrxP'}, ['partial','picture of who ([Num N A])'], null, null, 'A possible exception: it involves picture-of-who pied-piping, yet seems to be found in a fair number of languages.'],
+  ['t','N Num A Dem', 'few',       {y:'NP', x:'NP', w:'AgrxP'}, ['without pied-piping']],
+  ['u','A Num Dem N', null, {}, null, ['A','Num','Dem'], 'NP has not moved, and the modifiers to its left are in the wrong Merge order.'],
+  ['v','A Num N Dem', null, {y:'NP'}, null, ['A','Num','Dem'], 'Raising NP alone implies the Merge order A Num Dem N. Picture-of-who pied-piping of [Num N] or [A Num N] implies A Dem [Num N] or Dem [A Num N] — also wrong.'],
+  ['w','A N Num Dem', 'very few',  {x:'AgryP', w:'AgrxP'}, ['picture of who (of A)'], null, null, 'Only one marked option, yet found in very few languages (elsewhere Cinque says “few”). In his overview of movement types he classes this order as partial movement, but his count names only this one.'],
+  ['x','N A Num Dem', 'very many', {y:'NP', x:'AgryP', w:'AgrxP'}, []],
+].map(([L, order, freq, ops, marked, mods, why, note]) => ({L, order, freq, ops, marked, ok: !!freq, mods: mods || UNI, why, note}));
+
+/* How Cinque characterises each movement step, in order (from the discussion of (6a)–(6x)).
+   vac   = whose-picture pied-piping, vacuous (only NP moves)       — stated in (6o), (6p), (6x)
+   vac*  = Cinque only says "NP raises past/around A"; his marked-option count leaves it out,
+           so it is the unmarked (vacuous whose-picture) case       — (6l), (6s)
+   either= (6b): vacuous whose-picture (unmarked) OR no pied-piping (marked)
+   np    = NP without pied-piping (marked)
+   wp    = whose-picture pied-piping (stated) ; wp* = unstated, but not counted as marked — (6w)
+   pw    = picture-of-who pied-piping
+   nf    = an already moved phrase raises again without pied-piping — (6k), (6l)
+   sub   = extraction of the sole NP — (6p)
+   one   = (6j): "NP has moved one notch" (type not specified) */
+const TYPES = {
+  b:['either'], c:['np','np'], d:['np','np','np'], k:['pw','nf'], l:['vac*','wp','nf'], n:['pw'], o:['vac','wp'],
+  p:['vac','wp','sub'], r:['pw'], s:['vac*','pw'], t:['np','np','wp'], w:['pw','wp*'], x:['vac','wp','wp'],
+  f:['np'], g:['np','np'], h:['np','np','np'], j:['one'], v:['np']
+};
+
+/* =====================================================================
+   TREE CONSTRUCTION (bottom-up, Move interleaved with Merge)
+   ===================================================================== */
+const clone = o => JSON.parse(JSON.stringify(o));
+const chip = (cat, bad) => ({k:'c-'+cat, t:'chip', cat, bad: !!bad});
+const NPn = () => ({k:'NP', t:'ph', label:'NP', cat:'N', kids:[chip('N')]});
+const modP = (cat, bad) => ({k:cat+'P', t:'ph', label:cat+'P', cat, kids:[chip(cat, bad)]});
+const head = (k, label) => ({k:'h-'+k, t:'head', label});
+// strictly binary: XP → Spec + X′, X′ → X + Complement
+const bar = (k, label, kids) => ({k, t:'bar', label, kids});
+const FP = (lv, cat, comp) => ({k:lv.fp, t:'fp', label:lv.fp, kids:[modP(cat, cat !== lv.exp), bar(lv.fp+'b', lv.h+'′', [head(lv.h, lv.h), comp])]});
+// Agr first merges with its complement (no Spec yet). Internal Merge of a moved phrase then
+// projects again: [AgrP moved [Agr′ Agr Comp]].
+const AGR = (lv, comp) => ({k:lv.agr, t:'agr', label:'Agr_'+lv.s+'P', kids:[head('Agr'+lv.s, 'Agr_'+lv.s), comp]});
+const withSpec = (lv, agr, spec) => { agr.kids = [spec, bar(lv.agr+'b', 'Agr_'+lv.s+'′', agr.kids)]; return agr; };
+
+function find(n, key, parent = null, i = -1){
+  if (n.k === key) return {node:n, parent, i};
+  for (let j = 0; n.kids && j < n.kids.length; j++){ const r = find(n.kids[j], key, n, j); if (r) return r; }
+  return null;
+}
+function lin(n){
+  if (n.t === 'chip') return [n.cat];
+  return n.kids ? n.kids.flatMap(lin) : [];
+}
+const bracket = n => '[' + lin(n).join(' ') + ']';
+
+// type: Cinque's characterisation of this step (see TYPES); the tree is only used to phrase it
+// and to check that the characterisation fits the structure.
+function describeMove(tree, item, crossed, s, type, L){
+  const node = find(tree, item).node, spec = `Spec,Agr<sub>${s}</sub>P`;
+  const b = bracket(node), sp = node.kids && node.kids[0];
+  const moved = !!node.idx, specMoved = !!(sp && sp.idx);
+  const container = item === 'NP' && ['AgryP','AgrxP'].map(k => find(tree, k)).find(c => c && c.node.idx && find(c.node, 'NP'));
+  const fits = {
+    vac: item === 'NP' && !moved, 'vac*': item === 'NP' && !moved, either: item === 'NP' && !moved,
+    np: item === 'NP' && !container, one: item === 'NP', sub: !!container,
+    wp: item !== 'NP' && !moved && specMoved, 'wp*': item !== 'NP' && !moved && specMoved,
+    pw: item !== 'NP' && !moved && !specMoved, nf: item !== 'NP' && moved
+  }[type];
+  if (!fits) console.error(`(6${L}): step type "${type}" does not fit the structure for ${item}`);
+  const roll = specMoved && sp.k === 'NP'
+    ? `NP sits in the Spec of ${b}`
+    : `${specMoved ? bracket(sp) : ''}, which contains NP, sits in the Spec of ${b}`;
+  switch (type){
+    case 'vac': case 'vac*':
+      return {ty:'Whose-picture pied-piping (vacuous)', tx:`NP raises past ${crossed} into ${spec}. Nothing has moved into NP’s Spec yet, so whose-picture pied-piping is vacuous: only NP moves (unmarked).` +
+        (type === 'vac*' ? ` Cinque describes this step only as NP raising past ${crossed} and does not count it as a marked option.` : '')};
+    case 'either':
+      return {ty:'Vacuous whose-picture, or no pied-piping', tx:`NP raises one notch, past ${crossed}, into ${spec}. Cinque allows either vacuous whose-picture pied-piping (unmarked) or movement without pied-piping (marked).`};
+    case 'np':
+      return {ty:'NP movement without pied-piping', tx: moved
+        ? `NP raises on, Spec to Spec, past ${crossed} — still without pied-piping.`
+        : `NP raises past ${crossed} into ${spec} on its own — without pied-piping (marked).`};
+    case 'one':
+      return {ty:'NP movement', tx:`NP raises one notch, past ${crossed}, into ${spec}.`};
+    case 'sub':
+      return {ty:'Extraction of NP', tx:`NP is extracted out of the moved ${bracket(container.node)} and raises past ${crossed} alone — the step that makes this order, if genuine, especially marked.`};
+    case 'wp': case 'wp*':
+      return {ty:'Whose-picture pied-piping', tx:`${roll}, so NP pied-pipes the whole phrase past ${crossed} — whose-picture pied-piping (“roll-up”, unmarked).` +
+        (type === 'wp*' ? ` Cinque only says that ${b} raises around ${crossed}, and does not count this step as marked.` : '')};
+    case 'pw':
+      return {ty:'Picture-of-who pied-piping', tx:`NP raises pied-piping ${b} past ${crossed}, with N still in situ inside it — picture-of-who pied-piping (marked).`};
+    case 'nf':
+      return {ty:'Raising without pied-piping', tx:`The already moved ${b} raises again, past ${crossed}, without pied-piping (marked).`};
+  }
+}
+
+function buildStates(def){
+  const S = [];
+  let tree = NPn(), n = 0;
+  S.push({tree, ty:'Merge', title:'Merge NP', tx:'The derivation starts from the noun phrase and is built bottom-up.'});
+  LV.forEach((lv, li) => {
+    const cat = def.mods[2 - li], bad = cat !== lv.exp;
+    tree = FP(lv, cat, clone(tree));
+    S.push({tree, ty:'Merge', bad, title:`Merge ${lv.fp} with ${cat}P in its Spec`,
+      tx: bad ? `${cat}P is merged in Spec,${lv.fp}. ✕ The universal Merge order requires ${lv.exp}P here.`
+              : `${cat}P is merged as the specifier of ${lv.fp}, the ${['lowest','middle','highest'][li]} modifier layer.`});
+    // External Merge of Agr: binary [AgrP Agr XP], no Spec yet
+    const item = def.ops[lv.s];
+    const agr = AGR(lv, clone(tree));
+    tree = agr;
+    S.push({tree, ty:'Merge', title:`Merge Agr_${lv.s}`,
+      tx:`Agr<sub>${lv.s}</sub> merges with ${lv.fp}, projecting Agr<sub>${lv.s}</sub>P. It has no Spec yet.` + (item ? '' : ' Nothing moves at this layer.')});
+    if (!item) return;
+    // Internal Merge (Move) into Spec,AgrP: this projects Agr′ and the Spec
+    const d = describeMove(agr, item, cat, lv.s, TYPES[def.L][n], def.L);
+    const t = clone(agr), r = find(t, item);
+    r.parent.kids[r.i] = {k:'t'+n, t:'trace', of:item, idx:IDX[item]};
+    r.node.idx = IDX[item];
+    tree = withSpec(lv, t, r.node);
+    // the open Spec is exactly as wide as the phrase that will land in it;
+    // the dashed marker sits where that phrase's root node will end up
+    const F = layout(tree), root = F.get(item);
+    let left = 1e9, right = -1e9;
+    for (const k of root.desc){ const q = F.get(k); if (!q.n.kids){ const w = LW[q.t]; left = Math.min(left, q.x - w/2); right = Math.max(right, q.x + w/2); } }
+    const pre = withSpec(lv, clone(agr), {k:'spec', t:'slot', item, w:right - left, off:root.x - left});
+    S.push({tree, pre, move:{item, n, crossed:cat, agr:lv.agr}, ty:'Move', moveTy:d.ty, title:`Move to Spec,Agr_${lv.s}P · ${d.ty}`, tx:d.tx});
+    n++;
+  });
+  return S;
+}
+
+/* =====================================================================
+   LAYOUT
+   ===================================================================== */
+const VW = 700, VH = 600, BASE = 500, LH = 36, GAP = 6;
+const LW = {chip:68, head:36, trace:24, slot:30};
+function layout(tree){
+  const out = new Map(); let x = 0, D = 0;
+  (function walk(n, depth, parent){
+    D = Math.max(D, depth);
+    const rec = {k:n.k, t:n.t, n, depth, parent, x:0};
+    out.set(n.k, rec);
+    if (!n.kids){ const w = n.w || LW[n.t]; rec.x = x + (n.off ?? w/2); x += w + GAP; }
+    else {
+      const ks = n.kids.map(c => walk(c, depth + 1, n.k));
+      rec.x = (ks[0].x + ks[ks.length-1].x) / 2;
+      rec.desc = [n.k, ...ks.flatMap(c => c.desc || [c.k])];
+    }
+    return rec;
+  })(tree, 0, null);
+  const off = (VW - (x - GAP)) / 2;
+  for (const r of out.values()){ r.x += off; r.y = BASE - (D - r.depth) * LH; }
+  return out;
+}
+
+/* =====================================================================
+   RENDER ENGINE — one rAF loop, time-based tweens
+   ===================================================================== */
+const NS = 'http://www.w3.org/2000/svg';
+const $ = id => document.getElementById(id);
+const gN = $('gNodes'), gE = $('gEdges'), gA = $('gArrows'), gH = $('gHalo');
+const live = new Map();
+const ease = p => p < .5 ? 4*p*p*p : 1 - Math.pow(-2*p + 2, 3)/2;
+const subTxt = s => s.replace(/_(\w)/g, '<tspan class="sub" dy="3">$1</tspan><tspan dy="-3">');
+function labelHTML(n){
+  let s = subTxt(n.label);
+  if (n.idx) s += `<tspan class="sub" dy="3">${n.idx}</tspan>`;
+  return s;
+}
+function topOff(t){ return t === 'chip' ? 20 : t === 'slot' ? 12 : 8; }
+
+function drawNode(rec){
+  const n = rec.n, g = document.createElementNS(NS, 'g');
+  if (n.t === 'chip'){
+    g.innerHTML = `<rect class="chip-r" x="-32" y="-20" width="64" height="40" rx="10" style="fill:${CAT[n.cat].c}"/>
+      <text class="chip-t" text-anchor="middle" y="-1">${n.cat}</text>
+      <text class="chip-g" text-anchor="middle" y="13">${CAT[n.cat].g}</text>` +
+      (n.bad ? `<rect class="bad-r" x="-35" y="-23" width="70" height="46" rx="12"/><circle class="bad-x" cx="32" cy="-20" r="8"/><path d="M29 -23l6 6M35 -23l-6 6" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/>` : '');
+  } else if (n.t === 'trace'){
+    g.innerHTML = `<text class="tr" text-anchor="middle" dominant-baseline="central" style="fill:${ITEMC[n.of]}">t<tspan class="sub" dy="4">${n.idx}</tspan></text>`;
+  } else if (n.t === 'slot'){
+    g.innerHTML = `<circle class="ph" r="11" style="stroke:${ITEMC[n.item]}"/>`;
+  } else if (n.t === 'head'){
+    g.innerHTML = `<text class="hd" text-anchor="middle" dominant-baseline="central">${subTxt(n.label)}</text>`;
+  } else {
+    g.innerHTML = `<text class="lbl" text-anchor="middle" dominant-baseline="central"></text>`;
+  }
+  return g;
+}
+function styleLabel(node){
+  const n = node.n;
+  if (!['ph','fp','agr','bar'].includes(n.t)) return;
+  const sig = n.label + (n.idx || '');
+  if (node.sig === sig) return;
+  node.sig = sig;
+  const tx = node.g.querySelector('text');
+  tx.innerHTML = labelHTML(n);
+  const c = IDX[n.k] && n.idx ? ITEMC[n.k] : (n.t === 'ph' ? CAT[n.cat].c : null);
+  tx.style.fill = c || '';
+  tx.style.fontWeight = c ? 700 : '';
+}
+
+function setScene(lay, opt = {}){
+  const now = vnow, dur = opt.dur || 600;
+  const moved = new Set(opt.moved || []);
+  for (const rec of lay.values()){
+    let node = live.get(rec.k);
+    if (!node){
+      const g = drawNode(rec);
+      gN.appendChild(g);
+      const e = document.createElementNS(NS, 'line'); e.setAttribute('class','edge'); gE.appendChild(e);
+      node = {g, edge:e, x:rec.x, y:rec.y - (rec.t === 'trace' || opt.inPlace ? 0 : 14), o:0, eo:1};
+      if (rec.k === opt.crossfade){
+        // appears in place of an existing label: the node (and its branches) are solid at once, only the text fades in
+        node.o = 1; g.classList.add('xfade'); g.style.setProperty('--fd', dur*.45/rate + 'ms');
+      } else if (rec.t === 'trace' || opt.lateNew) node.delayO = opt.lateNew || .45;
+      live.set(rec.k, node);
+    } else node.delayO = 0;
+    const reparent = node.parent !== undefined && node.parent !== rec.parent;
+    node.n = rec.n; node.parent = rec.parent; node.dead = false; node.t = rec.t;
+    styleLabel(node);
+    node.tw = {fx:node.x, fy:node.y, fo:node.o, tx:rec.x, ty:rec.y, to:1, start:now, dur, late: reparent && moved.has(rec.k),
+               reappear: rec.k === opt.reappear};
+    node.hideKids = false; // in case an interrupted reappear left it set
+    if (moved.has(rec.k) && opt.route){
+      // the whole constituent travels rigidly along the root's route
+      const R = opt.route;
+      node.tw.route = R;
+      node.tw.rel0 = {x: node.x - R.p0.x, y: node.y - R.p0.y};
+      node.tw.rel1 = {x: rec.x - R.p3.x, y: rec.y - R.p3.y};
+    }
+    node.g.classList.toggle('flying', moved.has(rec.k));
+  }
+  for (const [k, node] of live){
+    if (!lay.has(k)){
+      node.dead = true;
+      // fadeLate: leave as the moving phrase arrives (cross-fading with its new branch)
+      node.tw = opt.fadeLate ? {fx:node.x, fy:node.y, fo:node.o, tx:node.x, ty:node.y, to:0, start:now + dur*.85, dur:dur*.15}
+                             : {fx:node.x, fy:node.y, fo:node.o, tx:node.x, ty:node.y, to:0, start:now, dur:Math.min(dur, 450)};
+    }
+  }
+  return wait(dur);
+}
+
+let halo = null; // {keys, color, o, from, to, start, dur}
+function haloTo(keys, color, to, dur){
+  const now = vnow, cur = halo ? haloOpacity(now) : 0;
+  halo = {keys: keys || (halo && halo.keys), color: color || (halo && halo.color), from:cur, to, start:now, dur};
+}
+function haloOpacity(now){ if (!halo) return 0; const p = Math.min(1, (now - halo.start)/halo.dur); return halo.from + (halo.to - halo.from)*p; }
+
+/* Movement route: one cubic Bézier that swings down and under the material it crosses. */
+function route(from, to, depth){
+  const base = Math.max(from.y, to.y) + depth; // vertical tangents at both ends: a smooth U under the crossed material
+  return {p0:from, p1:{x:from.x, y:base}, p2:{x:to.x, y:base}, p3:to};
+}
+function bez(R, t){
+  const u = 1 - t, a = u*u*u, b = 3*u*u*t, c = 3*u*t*t, d = t*t*t;
+  return {x:a*R.p0.x + b*R.p1.x + c*R.p2.x + d*R.p3.x, y:a*R.p0.y + b*R.p1.y + c*R.p2.y + d*R.p3.y};
+}
+const routeD = R => `M${R.p0.x} ${R.p0.y} C${R.p1.x} ${R.p1.y} ${R.p2.x} ${R.p2.y} ${R.p3.x} ${R.p3.y}`;
+const HALF = {chip:[32,20], head:[16,8], trace:[11,9], slot:[12,12]};
+const half = t => HALF[t] || [18,9];
+
+/* Plan a move while the rest of the tree stands still:
+   the constituent lands in the open Spec (just left of everything else), then the tree re-centres. */
+function planFlight(P, F, item){
+  const root = F.get(item), ph = P.get('spec'), from = {x:P.get(item).x, y:P.get(item).y};
+  const rel = new Map(root.desc.map(k => { const r = F.get(k); return [k, {x:r.x - root.x, y:r.y - root.y, t:r.t}]; }));
+  const to = {x:ph.x, y:ph.y}; // the root lands exactly on the dashed marker
+  const obstacles = [...P.values()].filter(r => !rel.has(r.k) && r.k !== 'spec')
+    .map(r => { const [w, h] = half(r.t); return [r.x - w - 4, r.x + w + 4, r.y - h - 4, r.y + h + 4]; });
+  const clear = R => {
+    for (let t = .04; t < .97; t += .02){
+      const b = bez(R, ease(t));
+      for (const r of rel.values()){
+        const [w, h] = half(r.t), x = b.x + r.x, y = b.y + r.y;
+        for (const o of obstacles) if (x - w < o[1] && o[0] < x + w && y - h < o[3] && o[2] < y + h) return false;
+      }
+    }
+    return true;
+  };
+  let R; for (let depth = 50; depth <= 700; depth += 12){ R = route(from, to, depth); if (clear(R)) break; }
+  return {R, rel, to};
+}
+
+/* Camera: the viewBox eases toward whatever needs to be on screen. */
+const svgEl = $('svg');
+let cam = null, camTw = null;
+function boundsOf(recs){
+  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+  for (const r of recs){ const [w, h] = half(r.t); x0 = Math.min(x0, r.x - w); x1 = Math.max(x1, r.x + w); y0 = Math.min(y0, r.y - h); y1 = Math.max(y1, r.y + h); }
+  return {x0, x1, y0, y1};
+}
+function camTo(b, dur){
+  const pad = 18, w = Math.max(b.x1 - b.x0 + 2*pad, 480), h = Math.max(b.y1 - b.y0 + 2*pad, 240);
+  const target = {x:(b.x0 + b.x1)/2 - w/2, y:(b.y0 + b.y1)/2 - h/2, w, h};
+  if (!cam || !dur){ cam = target; camTw = null; return; }
+  camTw = {from:{...cam}, to:target, start:vnow, dur};
+}
+
+let chains = [];      // moves made so far: {n, item, crossed}
+let trail = null;     // the route of the move in progress: {R, color, start, dur, fade}
+let showPaths = false;
+/* Virtual clock: every tween, wait, camera move and trail runs on it. Raising `rate` fast-forwards
+   whatever is in progress along exactly the same paths (used when the user clicks ahead). */
+let vnow = 0, lastReal = null, rate = 1;
+const vwaits = [];
+function frame(real){
+  if (lastReal !== null) vnow += Math.min(100, real - lastReal) * rate;
+  lastReal = real;
+  for (let i = vwaits.length - 1; i >= 0; i--) if (vwaits[i].t <= vnow){ vwaits[i].r(); vwaits.splice(i, 1); }
+  render(vnow);
+  requestAnimationFrame(frame);
+}
+function render(now){
+  if (camTw){
+    const p = Math.min(1, (now - camTw.start)/camTw.dur), e = ease(p), A = camTw.from, B = camTw.to;
+    cam = {x:A.x + (B.x - A.x)*e, y:A.y + (B.y - A.y)*e, w:A.w + (B.w - A.w)*e, h:A.h + (B.h - A.h)*e};
+    if (p >= 1) camTw = null;
+  }
+  if (cam) svgEl.setAttribute('viewBox', `${cam.x.toFixed(1)} ${cam.y.toFixed(1)} ${cam.w.toFixed(1)} ${cam.h.toFixed(1)}`);
+  for (const [k, n] of live){
+    const tw = n.tw;
+    if (tw){
+      const p = Math.max(0, Math.min(1, (now - tw.start)/tw.dur)), e = ease(p);
+      if (tw.reappear){
+        // fade out where it is, then fade back in at its new place (the label it leaves behind is taken over by X′)
+        const back = p >= .5;
+        n.x = back ? tw.tx : tw.fx; n.y = back ? tw.ty : tw.fy;
+        n.o = back ? (p - .5)/.5 : tw.fo*Math.max(0, 1 - p/.4);
+        n.eo = 1;
+        n.hideKids = !back; // its new branches only exist once it stands at its new place
+        if (p >= 1){ n.tw = null; n.hideKids = false; }
+        n.g.setAttribute('transform', `translate(${n.x.toFixed(1)},${n.y.toFixed(1)})`);
+        n.g.style.opacity = n.o;
+        continue;
+      }
+      if (tw.route){
+        const b = bez(tw.route, e);
+        n.x = b.x + tw.rel0.x + (tw.rel1.x - tw.rel0.x)*e;
+        n.y = b.y + tw.rel0.y + (tw.rel1.y - tw.rel0.y)*e;
+      } else {
+        n.x = tw.fx + (tw.tx - tw.fx)*e;
+        n.y = tw.fy + (tw.ty - tw.fy)*e;
+      }
+      const po = n.delayO ? Math.max(0, (p - n.delayO)/(1 - n.delayO)) : p;
+      n.o = tw.fo + (tw.to - tw.fo)*po;
+      n.eo = tw.late ? Math.max(0, (p - .85)/.15) : 1;
+      if (p >= 1){ n.tw = null; n.delayO = 0; if (n.dead){ n.g.remove(); n.edge.remove(); live.delete(k); continue; } }
+    }
+    n.g.setAttribute('transform', `translate(${n.x.toFixed(1)},${n.y.toFixed(1)})`);
+    n.g.style.opacity = n.o;
+  }
+  for (const n of live.values()){
+    const P = n.parent && live.get(n.parent);
+    if (!P){ n.edge.style.opacity = 0; continue; }
+    n.edge.setAttribute('x1', P.x); n.edge.setAttribute('y1', P.y + 8);
+    n.edge.setAttribute('x2', n.x); n.edge.setAttribute('y2', n.y - topOff(n.t));
+    n.edge.style.opacity = P.hideKids ? 0 : Math.min(n.o, P.o) * n.eo;
+  }
+  // halo around the moving constituent
+  const ho = haloOpacity(now);
+  if (ho > 0.01 && halo.keys){
+    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    for (const k of halo.keys){ const n = live.get(k); if (!n || n.dead) continue;
+      const w = n.t === 'chip' ? 34 : 18, h = n.t === 'chip' ? 22 : 11;
+      x0 = Math.min(x0, n.x - w); x1 = Math.max(x1, n.x + w); y0 = Math.min(y0, n.y - h); y1 = Math.max(y1, n.y + h); }
+    gH.innerHTML = x0 < 1e9 ? `<rect class="halo" x="${x0-7}" y="${y0-6}" width="${x1-x0+14}" height="${y1-y0+12}" rx="14"
+      style="fill:color-mix(in srgb, ${halo.color} 12%, transparent);stroke:${halo.color};opacity:${ho}"/>` : '';
+  } else gH.innerHTML = '';
+  let html = '';
+  // optional: every movement chain, drawn along the same under-route the flight used
+  if (showPaths) chains.forEach((m, i) => {
+    const later = chains.slice(i + 1).find(b => b.item === m.item);
+    const A = live.get('t'+m.n), B = live.get(later ? 't'+later.n : m.item);
+    if (!A || !B || A.dead || B.dead) return;
+    const from = {x:A.x, y:A.y + 11}, to = {x:B.x, y:B.y + 10};
+    const R = route(from, to, 46 + Math.abs(from.x - to.x)*.12);
+    const op = Math.min(A.o, B.o)*.8, c = ITEMC[m.item];
+    html += `<path class="chain" d="${routeD(R)}" style="stroke:${c};opacity:${op}"/>
+      <circle cx="${from.x}" cy="${from.y}" r="2.2" style="fill:${c};opacity:${op}"/>
+      <path class="chain-h" d="M${to.x-4} ${to.y+6} L${to.x} ${to.y} L${to.x+4} ${to.y+6}" style="stroke:${c};opacity:${op}"/>`;
+  });
+  // fading trail behind the constituent in flight
+  if (trail){
+    const p = Math.min(1, (now - trail.start)/trail.dur);
+    const f = trail.fade ? 1 - Math.min(1, (now - trail.fade)/600) : 1;
+    if (f <= 0) trail = null;
+    else html += `<path class="trail" pathLength="1" stroke-dasharray="${ease(p)} 1" d="${routeD(trail.R)}" style="stroke:${trail.color};opacity:${.55*f}"/>`;
+  }
+  gA.innerHTML = html;
+}
+requestAnimationFrame(frame);
+
+/* =====================================================================
+   SURFACE ORDER ROW
+   ===================================================================== */
+const row = $('row'), tiles = {};
+for (const k of ['Dem','Num','A','N']){
+  const t = document.createElement('div');
+  t.className = 'tile'; t.style.setProperty('--c', CAT[k].c); t.style.opacity = 0;
+  t.innerHTML = `${k}<small>${CAT[k].g}</small>`;
+  row.append(t); tiles[k] = t;
+}
+function setRow(order){
+  for (const k in tiles){
+    const i = order.indexOf(k);
+    tiles[k].style.opacity = i < 0 ? 0 : 1;
+    if (i >= 0) tiles[k].style.left = `calc(${i*25}% + ${i*1.5}px)`;
+  }
+}
+
+/* =====================================================================
+   PLAYER
+   ===================================================================== */
+let def, states = [], cur = 0, speed = 1, playing = false, token = 0;
+const wait = ms => new Promise(r => vwaits.push({t:vnow + ms, r}));
+
+function setChainsUpTo(i){ chains = states.slice(1, i + 1).filter(s => s.move).map(s => s.move); }
+
+function updateUI(){
+  const s = states[cur];
+  $('capN').textContent = `${cur + 1}/${states.length}`;
+  $('capT').innerHTML = s.title.replace(/_(\w)/g, '<sub>$1</sub>');
+  $('capX').innerHTML = s.tx;
+  $('caption').classList.toggle('badc', !!s.bad);
+  [...$('steps').children].forEach((li, i) => { li.classList.toggle('cur', i === cur); li.classList.toggle('done', i < cur); });
+  const curLi = $('steps').children[cur];
+  if (curLi) curLi.scrollIntoView({block:'nearest', behavior:'smooth'});
+  [...$('dots').children].forEach((d, i) => { d.classList.toggle('cur', i === cur); d.classList.toggle('done', i < cur); });
+  $('prevBtn').disabled = cur === 0;
+  $('nextBtn').disabled = cur >= states.length - 1;
+  $('playBtn').textContent = playing ? 'Pause' : (cur >= states.length - 1 ? 'Replay' : 'Play');
+  const done = cur === states.length - 1;
+  $('surfLb').textContent = done ? (def.ok ? 'Surface order' : 'Result') : 'Linear order';
+  row.classList.toggle('bad', !def.ok);
+  [...$('order').children].forEach((w, i) => w.style.color = done ? CAT[def.order.split(' ')[i]].c : '');
+}
+
+// Shift a fresh layout so that node `key` stays exactly where it is on screen now.
+// Existing structure then stays put, new structure grows around it, and the camera does the centring.
+function anchorTo(L, key){
+  const a = live.get(key), b = L.get(key);
+  if (!a || !b || a.dead) return L;
+  const dx = a.x - b.x, dy = a.y - b.y;
+  for (const r of L.values()){ r.x += dx; r.y += dy; }
+  return L;
+}
+
+function jump(i, dur = 550){
+  cur = Math.max(0, Math.min(states.length - 1, i));
+  haloTo(null, null, 0, 150);
+  trail = null;
+  const L = anchorTo(layout(states[cur].tree), states[cur].tree.k);
+  camTo(boundsOf(L.values()), dur);
+  setScene(L, {dur});
+  setChainsUpTo(cur);
+  setRow(lin(states[cur].tree));
+  updateUI();
+}
+
+async function stepForward(my){
+  const next = states[cur + 1];
+  if (!next.move){
+    // External Merge: the existing tree (now the complement) keeps its place; the new
+    // head, specifier and projections fade in around it at the upper left
+    const prevRoot = states[cur].tree.k;
+    cur++; updateUI();
+    const L = anchorTo(layout(next.tree), prevRoot);
+    camTo(boundsOf(L.values()), 700/speed);
+    await setScene(L, {dur:700/speed, inPlace:true});
+    setRow(lin(next.tree));
+    return my === token;
+  }
+  // 1. Internal Merge begins: Agr′ appears and room opens for the Spec (dashed marker = landing site)
+  cur++; updateUI();
+  // Lay out the new structure so that the old AgrP, now Agr′, keeps its exact position:
+  // nothing that already exists moves; the new AgrP and the Spec grow out at the upper left.
+  const preLay = layout(next.pre), A = next.move.agr, oldTop = live.get(A), bar = preLay.get(A + 'b');
+  const dx = oldTop.x - bar.x, dy = oldTop.y - bar.y;
+  for (const r of preLay.values()){ r.x += dx; r.y += dy; }
+  const growDur = 1000/speed;
+  camTo(boundsOf(preLay.values()), growDur);
+  await setScene(preLay, {dur:growDur, inPlace:true, crossfade:A + 'b', reappear:A, lateNew:.55});
+  if (my !== token) return false;
+  // 2. highlight the constituent that will move
+  const item = next.move.item;
+  haloTo(preLay.get(item).desc, ITEMC[item], 1, 300/speed);
+  await wait(650/speed);
+  if (my !== token) return false;
+  // 3. move it along a curve under the crossed material into the open Spec; nothing else moves
+  const lay = layout(next.tree), it = lay.get(item);
+  const {R, rel, to} = planFlight(preLay, lay, item);
+  const scene = new Map();
+  for (const [k, r] of lay){
+    const p = rel.has(k) ? {x:to.x + rel.get(k).x, y:to.y + rel.get(k).y}
+            : k === 't' + next.move.n ? preLay.get(item) : preLay.get(k);
+    scene.set(k, {...r, x:p.x, y:p.y});
+  }
+  const dur = 1500/speed;
+  // keep the whole flight on screen
+  const flightBox = [];
+  for (let t = 0; t <= 1; t += .05){ const b = bez(R, t); for (const r of rel.values()) flightBox.push({t:r.t, x:b.x + r.x, y:b.y + r.y}); }
+  camTo(boundsOf([...preLay.values(), ...flightBox]), dur*.45);
+  trail = {R, color:ITEMC[item], start:vnow, dur};
+  await setScene(scene, {dur, moved:it.desc, route:R, fadeLate:true});
+  if (trail) trail.fade = vnow;
+  setChainsUpTo(cur);
+  setRow(lin(next.tree));
+  haloTo(null, null, 0, 350/speed);
+  if (my !== token) return false;
+  // 4. the tree re-forms around the new Spec and returns to the centre of view
+  await wait(250/speed);
+  if (my !== token) return false;
+  anchorTo(lay, item); // the phrase that just landed stays put while the rest closes up
+  camTo(boundsOf(lay.values()), 800/speed);
+  await setScene(lay, {dur:800/speed});
+  return my === token;
+}
+async function play(){
+  if (cur >= states.length - 1){ jump(0); await wait(600); }
+  const my = ++token; playing = true; busy = false; queued = 0; rate = 1; updateUI();
+  while (cur < states.length - 1){
+    if (!await stepForward(my)) return;
+    rate = 1; // a click only fast-forwards the step it was made in
+    await wait(380/speed);
+    if (my !== token) return;
+  }
+  playing = false; updateUI();
+}
+function stop(){ token++; playing = false; busy = false; queued = 0; rate = 1; }
+
+// portrait layouts size the stage box once per derivation (the camera zooms inside it)
+function fitView(){
+  const b = boundsOf(layout(states.at(-1).tree).values());
+  const w = Math.max(b.x1 - b.x0 + 36, 480), h = Math.max(b.y1 - b.y0 + 36, 240);
+  svgEl.style.setProperty('--ar', `${w} / ${h}`);
+  cam = null;
+}
+
+function select(L, autoplay = true){
+  stop();
+  def = ORDERS.find(o => o.L === L);
+  states = buildStates(def);
+  fitView();
+  document.querySelectorAll('.or').forEach(b => b.classList.toggle('sel', b.dataset.l === L));
+  $('order').innerHTML = def.order.split(' ').map(w => `<span>${w}</span>`).join('');
+  $('status').innerHTML = def.ok
+    ? `<span class="pill ok">✓ Attested <span class="f">· ${def.freq} languages</span></span>`
+    : `<span class="pill no">✕ Unattested</span>`;
+  // summary box
+  let sm;
+  if (def.ok){
+    const tags = def.marked.length ? def.marked.map(m => `<span class="tag m">${m}</span>`).join('') : `<span class="tag u">no marked option</span>`;
+    const count = def.L === 'p' ? 'especially marked' : def.marked.length; // (6p): Cinque gives no count
+    sm = `<div class="summary"><div class="k">Marked options · ${count}</div><div class="tags">${tags}</div>${def.note ? `<div class="nt">${def.note}</div>` : ''}</div>`;
+  } else {
+    sm = `<div class="summary badbox"><div class="k">Not derivable</div>${def.why}
+      <div class="nt">Shown below: the derivation it would need, starting from the wrong Merge order ${def.mods.join(' &gt; ')} &gt; N.</div></div>`;
+  }
+  $('summary').innerHTML = sm;
+  $('stepCount').textContent = `${states.filter(s => s.move).length} move${states.filter(s => s.move).length === 1 ? '' : 's'}`;
+  // steps list
+  const ol = $('steps'); ol.innerHTML = '';
+  states.forEach((s, i) => {
+    const li = document.createElement('li');
+    const c = s.move ? ITEMC[s.move.item] : '';
+    const tag = s.bad ? `<span class="ty bd">✕ Merge</span>` : s.move ? `<span class="ty mv" style="--c:${c}">Move</span>` : `<span class="ty">Merge</span>`;
+    li.innerHTML = `<span class="n">${i+1}</span><div><div class="tt">${tag}<span>${s.title.replace(/_(\w)/g,'<sub>$1</sub>')}</span></div><div class="tx">${s.tx}</div></div>`;
+    li.onclick = () => { stop(); jump(i); };
+    ol.append(li);
+  });
+  const dots = $('dots'); dots.innerHTML = '';
+  states.forEach((s, i) => { const d = document.createElement('button'); d.title = `Step ${i+1}`; d.onclick = () => { stop(); jump(i); }; dots.append(d); });
+  // reset the stage
+  for (const n of live.values()){ n.g.remove(); n.edge.remove(); }
+  live.clear(); chains = []; trail = null; halo = null;
+  jump(0, 500);
+  if (autoplay) setTimeout(() => { if (def.L === L && cur === 0 && !playing) play(); }, 700);
+}
+
+/* =====================================================================
+   ORDERS TABLE + CONTROLS
+   ===================================================================== */
+const table = $('table');
+for (let b = 0; b < 6; b++){
+  const blk = document.createElement('div'); blk.className = 'block';
+  ORDERS.slice(b*4, b*4 + 4).forEach(o => {
+    const r = document.createElement('button');
+    r.className = 'or' + (o.ok ? '' : ' un'); r.dataset.l = o.L;
+    r.innerHTML = `<span class="mk ${o.ok?'ok':'no'}">${o.ok?'✓':'✕'}</span>
+      <span class="tk">${o.order.split(' ').map(k => `<span style="--c:${CAT[k].c}">${k}</span>`).join('')}</span>
+      <span class="fq ${o.freq && o.freq.startsWith('very many') ? 'hi':''}">${o.freq || 'Ø'}</span>`;
+    r.onclick = () => select(o.L);
+    blk.append(r);
+  });
+  table.append(blk);
+}
+
+$('playBtn').onclick = () => { if (playing){ stop(); updateUI(); } else play(); };
+/* Next / click on the tree. While a step is animating, a click does not cut it short: it fast-forwards
+   the rest of it along the same paths and queues one more step. Queued steps also run fast; the last
+   one the user asked for plays at normal speed. During autoplay a click fast-forwards the current step. */
+const RUSH = 4;
+let busy = false, queued = 0;
+// (called directly by clicks on the tree and the → key: the Next button is disabled on the last step,
+// but the last step's animation must still be fast-forwardable)
+async function advance(){
+  if (playing){ rate = RUSH; return; }
+  if (busy){
+    if (cur + queued < states.length - 1) queued++;
+    rate = RUSH;
+    return;
+  }
+  if (cur >= states.length - 1) return;
+  const my = ++token; busy = my;
+  while (await stepForward(my) && my === token && queued > 0 && cur < states.length - 1){
+    queued--;
+    rate = queued > 0 ? RUSH : 1;
+  }
+  if (busy === my){ busy = false; queued = 0; rate = 1; }
+  if (my === token) updateUI();
+}
+$('nextBtn').onclick = advance;
+$('prevBtn').onclick = () => { stop(); jump(cur - 1); };
+svgEl.addEventListener('click', e => { if (e.button === 0) advance(); }); // click the derivation to advance
+$('pathsBtn').onclick = () => { showPaths = !showPaths; $('pathsBtn').classList.toggle('on', showPaths); };
+$('resetBtn').onclick = () => { stop(); jump(0); };
+$('speedSeg').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  speed = +b.dataset.s;
+  [...$('speedSeg').children].forEach(x => x.classList.toggle('on', x === b));
+};
+$('tabs').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  $('app').dataset.tab = b.dataset.t;
+  [...$('tabs').children].forEach(x => x.classList.toggle('on', x === b));
+};
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight'){ e.preventDefault(); advance(); }
+  else if (e.key === 'ArrowLeft'){ e.preventDefault(); $('prevBtn').click(); }
+  else if (e.key === ' '){ e.preventDefault(); $('playBtn').click(); }
+  else if (e.key === 'ArrowDown' || e.key === 'ArrowUp'){
+    e.preventDefault();
+    const i = ORDERS.findIndex(o => o.L === def.L) + (e.key === 'ArrowDown' ? 1 : -1);
+    if (ORDERS[i]) select(ORDERS[i].L);
+  }
+  else if (e.key.toLowerCase() === 'r') $('resetBtn').click();
+  else if (e.key.toLowerCase() === 'p') $('pathsBtn').click();
+});
+document.getElementById('themeBtn').onclick = () => lingvisToggleTheme();
+
+// sanity check: every order derives its own surface string
+ORDERS.forEach(o => { const s = buildStates(o); if (lin(s.at(-1).tree).join(' ') !== o.order) console.error('mismatch', o.L); });
+select('x');
+})();
+</script>
+</body>
+</html>
