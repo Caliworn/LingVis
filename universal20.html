@@ -419,10 +419,16 @@ function buildStates(def){
   S.push({tree, ty:'Merge', title:'Merge NP', tx:'The derivation starts from the noun phrase and is built bottom-up.'});
   LV.forEach((lv, li) => {
     const cat = def.mods[2 - li], bad = cat !== lv.exp;
-    tree = FP(lv, cat, clone(tree));
-    S.push({tree, ty:'Merge', bad, title:`Merge ${lv.fp} with ${cat}P in its Spec`,
+    // 1. External Merge of the functional head with the structure built so far: [YP Y NP], no Spec yet
+    const compLabel = tree.label;
+    tree = {k:lv.fp, t:'fp', label:lv.fp, kids:[head(lv.h, lv.h), clone(tree)]};
+    S.push({tree, ty:'Merge', title:`Merge ${lv.h}`,
+      tx:`${lv.h} merges with ${compLabel.replace(/_(\w)/g, '<sub>$1</sub>')}, projecting ${lv.fp}. It has no specifier yet.`});
+    // 2. The modifier phrase merges as its specifier; the projection just built becomes Y′
+    tree = FP(lv, cat, clone(tree.kids[1]));
+    S.push({tree, ty:'Merge', bad, specMerge:lv.fp, title:`Merge ${cat}P in Spec,${lv.fp}`,
       tx: bad ? `${cat}P is merged in Spec,${lv.fp}. ✕ The universal Merge order requires ${lv.exp}P here.`
-              : `${cat}P is merged as the specifier of ${lv.fp}, the ${['lowest','middle','highest'][li]} modifier layer.`});
+              : `${cat}P merges as the specifier of ${lv.fp}, the ${['lowest','middle','highest'][li]} modifier layer; [${lv.h} ${compLabel.replace(/_(\w)/g, '<sub>$1</sub>')}] becomes ${lv.h}′.`});
     // External Merge of Agr: binary [AgrP Agr XP], no Spec yet
     const item = def.ops[lv.s];
     const agr = AGR(lv, clone(tree));
@@ -486,7 +492,7 @@ function labelHTML(n){
   if (n.idx) s += `<tspan class="sub" dy="3">${n.idx}</tspan>`;
   return s;
 }
-function topOff(t){ return t === 'chip' ? 20 : t === 'slot' ? 12 : 8; }
+function topOff(t){ return t === 'chip' ? 20 : 8; } // the landing marker's top is aligned with a label's, so its branch matches exactly
 
 function drawNode(rec){
   const n = rec.n, g = document.createElementNS(NS, 'g');
@@ -498,7 +504,7 @@ function drawNode(rec){
   } else if (n.t === 'trace'){
     g.innerHTML = `<text class="tr" text-anchor="middle" dominant-baseline="central" style="fill:${ITEMC[n.of]}">t<tspan class="sub" dy="4">${n.idx}</tspan></text>`;
   } else if (n.t === 'slot'){
-    g.innerHTML = `<circle class="ph" r="11" style="stroke:${ITEMC[n.item]}"/>`;
+    g.innerHTML = `<circle class="ph" cy="1" r="9" style="stroke:${ITEMC[n.item]}"/>`;
   } else if (n.t === 'head'){
     g.innerHTML = `<text class="hd" text-anchor="middle" dominant-baseline="central">${subTxt(n.label)}</text>`;
   } else {
@@ -536,7 +542,7 @@ function setScene(lay, opt = {}){
       live.set(rec.k, node);
     } else node.delayO = 0;
     const reparent = node.parent !== undefined && node.parent !== rec.parent;
-    node.n = rec.n; node.parent = rec.parent; node.dead = false; node.t = rec.t;
+    node.n = rec.n; node.parent = rec.parent; node.dead = false; node.keepEdge = false; node.t = rec.t;
     styleLabel(node);
     node.tw = {fx:node.x, fy:node.y, fo:node.o, tx:rec.x, ty:rec.y, to:1, start:now, dur, late: reparent && moved.has(rec.k),
                reappear: rec.k === opt.reappear};
@@ -554,6 +560,7 @@ function setScene(lay, opt = {}){
     if (!lay.has(k)){
       node.dead = true;
       // fadeLate: leave as the moving phrase arrives (cross-fading with its new branch)
+      if (opt.fadeLate) node.keepEdge = true;
       node.tw = opt.fadeLate ? {fx:node.x, fy:node.y, fo:node.o, tx:node.x, ty:node.y, to:0, start:now + dur*.85, dur:dur*.15}
                              : {fx:node.x, fy:node.y, fo:node.o, tx:node.x, ty:node.y, to:0, start:now, dur:Math.min(dur, 450)};
     }
@@ -665,7 +672,7 @@ function render(now){
       }
       const po = n.delayO ? Math.max(0, (p - n.delayO)/(1 - n.delayO)) : p;
       n.o = tw.fo + (tw.to - tw.fo)*po;
-      n.eo = tw.late ? Math.max(0, (p - .85)/.15) : 1;
+      n.eo = tw.late ? (p >= 1 ? 1 : 0) : 1;
       if (p >= 1){ n.tw = null; n.delayO = 0; if (n.dead){ n.g.remove(); n.edge.remove(); live.delete(k); continue; } }
     }
     n.g.setAttribute('transform', `translate(${n.x.toFixed(1)},${n.y.toFixed(1)})`);
@@ -676,7 +683,7 @@ function render(now){
     if (!P){ n.edge.style.opacity = 0; continue; }
     n.edge.setAttribute('x1', P.x); n.edge.setAttribute('y1', P.y + 8);
     n.edge.setAttribute('x2', n.x); n.edge.setAttribute('y2', n.y - topOff(n.t));
-    n.edge.style.opacity = P.hideKids ? 0 : Math.min(n.o, P.o) * n.eo;
+    n.edge.style.opacity = P.hideKids ? 0 : (n.keepEdge ? P.o : Math.min(n.o, P.o)) * n.eo;
   }
   // halo around the moving constituent
   const ho = haloOpacity(now);
@@ -786,6 +793,17 @@ async function stepForward(my){
     // head, specifier and projections fade in around it at the upper left
     const prevRoot = states[cur].tree.k;
     cur++; updateUI();
+    if (next.specMerge){
+      // A specifier merges: the old YP keeps its place and becomes Y′, the new YP and its Spec grow at the upper left
+      const K = next.specMerge, L = layout(next.tree), old = live.get(K), bar = L.get(K + 'b');
+      const dx = old.x - bar.x, dy = old.y - bar.y;
+      for (const r of L.values()){ r.x += dx; r.y += dy; }
+      const d = 1000/speed;
+      camTo(boundsOf(L.values()), d);
+      await setScene(L, {dur:d, inPlace:true, crossfade:K + 'b', reappear:K, lateNew:.55});
+      setRow(lin(next.tree));
+      return my === token;
+    }
     const L = anchorTo(layout(next.tree), prevRoot);
     camTo(boundsOf(L.values()), 700/speed);
     await setScene(L, {dur:700/speed, inPlace:true});
