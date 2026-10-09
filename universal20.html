@@ -148,7 +148,8 @@ button{font:inherit;color:inherit}
 .btn.primary{background:var(--ink);color:var(--surface);border-color:var(--ink);min-width:78px}
 .btn.primary:hover:not(:disabled){background:color-mix(in srgb,var(--ink) 82%,var(--surface))}
 .btn svg{width:14px;height:14px}
-.dots{display:flex;gap:4px;margin:0 4px}
+.dots{display:flex;gap:4px;margin:-10px 4px;padding:10px 0;touch-action:none;cursor:pointer} /* the padding widens the strip you can grab */
+.dots.scrub,.dots.scrub button{cursor:grabbing}
 .dots button{width:9px;height:9px;border-radius:50%;border:0;background:var(--line);padding:0;cursor:pointer;transition:background .2s,transform .2s}
 .dots button.done{background:var(--faint)}
 .dots button.cur{background:var(--ink);transform:scale(1.3)}
@@ -164,7 +165,7 @@ button{font:inherit;color:inherit}
 
 /* fast clicking must not select text or zoom the page */
 .stage-svg,.st-foot,.tabs,.toggle,.or,ol.steps .n{-webkit-user-select:none;user-select:none}
-.stage-svg,.btn,.dots button,.seg button,.tabs button,.toggle,.caption{touch-action:manipulation}
+.stage-svg,.btn,.seg button,.tabs button,.toggle,.caption{touch-action:manipulation}
 
 /* ================= svg tree ================= */
 .lbl{font:600 12.5px 'JetBrains Mono',monospace;fill:var(--muted)}
@@ -191,8 +192,6 @@ button{font:inherit;color:inherit}
 .mini-bg{fill:var(--surface);stroke:var(--line);opacity:.92}
 .mini-e{stroke:var(--faint)}
 .mini-cam{fill:color-mix(in srgb,var(--ink) 6%,transparent);stroke:var(--ink)}
-.xfade text{animation:xf var(--fd,300ms) ease both}
-@keyframes xf{from{opacity:0}}
 
 /* ================= phone landscape ================= */
 @media (min-aspect-ratio:1/1) and (max-height:500px){
@@ -300,9 +299,9 @@ ol.steps li.cur .tx{display:block}
       <div class="surface"><span class="lb" id="surfLb">Linear order</span><div class="row" id="row"></div></div>
       <div class="controls">
         <button class="btn" id="resetBtn" title="Restart (R)" aria-label="Restart"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2.5 8a5.5 5.5 0 1 0 1.7-4M2.5 2.5v3h3"/></svg></button>
-        <button class="btn" id="prevBtn" title="Previous (←)" aria-label="Previous step"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3 5 8l5 5"/></svg></button>
+        <button class="btn" id="prevBtn" title="Previous step (← or right-click the tree)" aria-label="Previous step"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3 5 8l5 5"/></svg></button>
         <button class="btn primary" id="playBtn" title="Play / pause (Space)">Play</button>
-        <button class="btn" id="nextBtn" title="Next (→)" aria-label="Next step"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 3 5 5-5 5"/></svg></button>
+        <button class="btn" id="nextBtn" title="Next step (→ or click the tree)" aria-label="Next step"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 3 5 5-5 5"/></svg></button>
         <div class="dots" id="dots"></div>
         <div class="seg" id="speedSeg"><button data-s="0.6">0.5×</button><button data-s="1" class="on">1×</button><button data-s="1.8">2×</button></div>
       </div>
@@ -546,13 +545,15 @@ function layout(tree){
 }
 
 /* =====================================================================
-   RENDER ENGINE — one rAF loop, time-based tweens
+   RENDER ENGINE — each derivation is compiled into a timeline, and the picture is a pure function
+   of a single play head G (ms). Playing moves G forward, stepping back moves it backward, fast-forward
+   moves it faster, and turning round mid-step simply reverses its direction.
    ===================================================================== */
 const NS = 'http://www.w3.org/2000/svg';
 const $ = id => document.getElementById(id);
 const gN = $('gNodes'), gE = $('gEdges'), gA = $('gArrows'), gH = $('gHalo');
-const live = new Map();
 const ease = p => p < .5 ? 4*p*p*p : 1 - Math.pow(-2*p + 2, 3)/2;
+const clamp01 = v => Math.max(0, Math.min(1, v));
 const subTxt = s => s.replace(/_(\w)/g, '<tspan class="sub" dy="3">$1</tspan><tspan dy="-3">');
 function labelHTML(n){
   let s = subTxt(n.label);
@@ -594,59 +595,6 @@ function styleLabel(node){
   tx.style.fontWeight = c ? 700 : '';
 }
 
-function setScene(lay, opt = {}){
-  const now = vnow, dur = opt.dur || 600;
-  const moved = new Set(opt.moved || []);
-  for (const rec of lay.values()){
-    let node = live.get(rec.k), born = false;
-    if (!node){
-      born = true;
-      const g = drawNode(rec);
-      gN.appendChild(g);
-      const e = document.createElementNS(NS, 'line'); e.setAttribute('class','edge'); gE.appendChild(e);
-      node = {g, edge:e, x:rec.x, y:rec.y - (rec.t === 'trace' || opt.inPlace ? 0 : 14), o:0, eo:1};
-      if (rec.k === opt.crossfade){
-        // appears in place of an existing label: the node (and its branches) are solid at once, only the text fades in
-        node.o = 1; g.classList.add('xfade'); g.style.setProperty('--fd', dur*.45/rate + 'ms');
-      } else if (rec.t === 'trace' || opt.lateNew) node.delayO = opt.lateNew || .45;
-      live.set(rec.k, node);
-    } else node.delayO = 0;
-    const reparent = node.parent !== undefined && node.parent !== rec.parent;
-    node.n = rec.n; node.parent = rec.parent; node.dead = false; node.t = rec.t;
-    // a trace left by a move takes over the departing phrase's branch at once, so the branch never blinks out
-    node.keepEdge = born && rec.t === 'trace' && !!opt.route;
-    styleLabel(node);
-    node.tw = {fx:node.x, fy:node.y, fo:node.o, tx:rec.x, ty:rec.y, to:1, start:now, dur, late: reparent && moved.has(rec.k),
-               reappear: rec.k === opt.reappear};
-    node.hideKids = false; // in case an interrupted reappear left it set
-    if (moved.has(rec.k) && opt.route){
-      // the whole constituent travels rigidly along the root's route
-      const R = opt.route;
-      node.tw.route = R;
-      node.tw.rel0 = {x: node.x - R.p0.x, y: node.y - R.p0.y};
-      node.tw.rel1 = {x: rec.x - R.p3.x, y: rec.y - R.p3.y};
-    }
-    node.g.classList.toggle('flying', moved.has(rec.k));
-  }
-  for (const [k, node] of live){
-    if (!lay.has(k)){
-      node.dead = true;
-      // fadeLate: leave as the moving phrase arrives (cross-fading with its new branch)
-      if (opt.fadeLate) node.keepEdge = true;
-      node.tw = opt.fadeLate ? {fx:node.x, fy:node.y, fo:node.o, tx:node.x, ty:node.y, to:0, start:now + dur*.85, dur:dur*.15}
-                             : {fx:node.x, fy:node.y, fo:node.o, tx:node.x, ty:node.y, to:0, start:now, dur:Math.min(dur, 450)};
-    }
-  }
-  return wait(dur);
-}
-
-let halo = null; // {keys, color, o, from, to, start, dur}
-function haloTo(keys, color, to, dur){
-  const now = vnow, cur = halo ? haloOpacity(now) : 0;
-  halo = {keys: keys || (halo && halo.keys), color: color || (halo && halo.color), from:cur, to, start:now, dur};
-}
-function haloOpacity(now){ if (!halo) return 0; const p = Math.min(1, (now - halo.start)/halo.dur); return halo.from + (halo.to - halo.from)*p; }
-
 /* Movement route: one cubic Bézier that swings down and under the material it crosses. */
 function route(from, to, depth){
   const base = Math.max(from.y, to.y) + depth; // vertical tangents at both ends: a smooth U under the crossed material
@@ -686,9 +634,8 @@ function clearDepth(from, to, body, obstacles){
   return depth;
 }
 
-/* Camera: the viewBox eases toward whatever needs to be on screen. */
+/* Camera framing */
 const svgEl = $('svg');
-let cam = null, camTw = null;
 function boundsOf(recs){
   let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
   for (const r of recs){ const [w, h] = half(r.t); x0 = Math.min(x0, r.x - w); x1 = Math.max(x1, r.x + w); y0 = Math.min(y0, r.y - h); y1 = Math.max(y1, r.y + h); }
@@ -698,31 +645,28 @@ function boundsOf(recs){
    Once the tree outgrows that, it frames `focus` — where the current step happens — at reading size,
    and a minimap in the corner shows where that view sits in the whole tree. */
 const READ = .9, ZOOM_MAX = 1.3;
-let camFull = null; // the whole tree's padded box (the minimap's frame)
-function camTo(b, dur, focus){
+// the view box framing `b` (or, on narrow screens, `focus`), and the whole tree's box for the minimap
+function frameBox(b, focus){
   const pad = 18;
-  let w = b.x1 - b.x0 + 2*pad, h = b.y1 - b.y0 + 2*pad, cx = (b.x0 + b.x1)/2, cy = (b.y0 + b.y1)/2;
-  if (!compact){ w = Math.max(w, 480); h = Math.max(h, 240); camFull = null; }
+  let w = b.x1 - b.x0 + 2*pad, h = b.y1 - b.y0 + 2*pad, cx = (b.x0 + b.x1)/2, cy = (b.y0 + b.y1)/2, full = null;
+  if (!compact){ w = Math.max(w, 480); h = Math.max(h, 240); }
   else {
     const r = svgEl.getBoundingClientRect(), ew = r.width || 1, eh = r.height || 1, ar = ew/eh;
     const fit = (W, H) => W/H > ar ? [W, W/ar] : [H*ar, H]; // grow to the box's shape, so scale = ew/w
     [w, h] = fit(Math.max(w, ew/ZOOM_MAX), Math.max(h, eh/ZOOM_MAX));
-    camFull = {x:cx - w/2, y:cy - h/2, w, h};
+    full = {x:cx - w/2, y:cy - h/2, w, h};
     if (focus && ew/w < READ){
       const [fw, fh] = fit(Math.max(focus.x1 - focus.x0 + 2*pad, ew/READ), Math.max(focus.y1 - focus.y0 + 2*pad, eh/READ));
       const clamp = (v, lo, hi) => lo > hi ? (lo + hi)/2 : Math.min(hi, Math.max(lo, v));
       // stay inside the tree: no empty margins beyond its edges
-      cx = clamp((focus.x0 + focus.x1)/2, camFull.x + fw/2, camFull.x + w - fw/2);
-      cy = clamp((focus.y0 + focus.y1)/2, camFull.y + fh/2, camFull.y + h - fh/2);
+      cx = clamp((focus.x0 + focus.x1)/2, full.x + fw/2, full.x + w - fw/2);
+      cy = clamp((focus.y0 + focus.y1)/2, full.y + fh/2, full.y + h - fh/2);
       w = fw; h = fh;
     }
   }
-  const target = {x:cx - w/2, y:cy - h/2, w, h};
-  if (!cam || !dur){ cam = target; camTw = null; return; }
-  camTw = {from:{...cam}, to:target, start:vnow, dur};
+  return {box:{x:cx - w/2, y:cy - h/2, w, h}, full};
 }
 // the nodes a step adds (or names), with their mothers and daughters: what the camera should frame
-const fresh = L => [...L.keys()].filter(k => !live.has(k) || live.get(k).dead);
 function around(L, keys){
   const s = new Set(keys);
   for (const k of keys){ const r = L.get(k); if (!r) continue; if (r.parent) s.add(r.parent); if (r.n.kids) r.n.kids.forEach(c => s.add(c.k)); }
@@ -730,82 +674,264 @@ function around(L, keys){
 }
 const topOf = L => boundsOf([...L.values()].filter(r => r.depth <= 2)); // the newest layer sits on top
 
-let chains = [];      // moves made so far: {n, item, crossed}
-let trail = null;     // the route of the move in progress: {R, color, start, dur, fade}
-let showPaths = false;
-/* Virtual clock: every tween, wait, camera move and trail runs on it. Raising `rate` fast-forwards
-   whatever is in progress along exactly the same paths (used when the user clicks ahead). */
-let vnow = 0, lastReal = null, rate = 1;
-const vwaits = [];
-function frame(real){
-  if (lastReal !== null) vnow += Math.min(100, real - lastReal) * rate;
-  lastReal = real;
-  for (let i = vwaits.length - 1; i >= 0; i--) if (vwaits[i].t <= vnow){ vwaits[i].r(); vwaits.splice(i, 1); }
-  render(vnow);
-  requestAnimationFrame(frame);
-}
-function render(now){
-  if (camTw){
-    const p = Math.min(1, (now - camTw.start)/camTw.dur), e = ease(p), A = camTw.from, B = camTw.to;
-    cam = {x:A.x + (B.x - A.x)*e, y:A.y + (B.y - A.y)*e, w:A.w + (B.w - A.w)*e, h:A.h + (B.h - A.h)*e};
-    if (p >= 1) camTw = null;
-  }
-  if (cam) svgEl.setAttribute('viewBox', `${cam.x.toFixed(1)} ${cam.y.toFixed(1)} ${cam.w.toFixed(1)} ${cam.h.toFixed(1)}`);
-  for (const [k, n] of live){
-    const tw = n.tw;
-    if (tw){
-      const p = Math.max(0, Math.min(1, (now - tw.start)/tw.dur)), e = ease(p);
-      if (tw.reappear){
-        // fade out where it is, then fade back in at its new place (the label it leaves behind is taken over by X′)
-        const back = p >= .5;
-        n.x = back ? tw.tx : tw.fx; n.y = back ? tw.ty : tw.fy;
-        n.o = back ? (p - .5)/.5 : tw.fo*Math.max(0, 1 - p/.4);
-        n.eo = 1;
-        n.hideKids = !back; // its new branches only exist once it stands at its new place
-        if (p >= 1){ n.tw = null; n.hideKids = false; }
-        n.g.setAttribute('transform', `translate(${n.x.toFixed(1)},${n.y.toFixed(1)})`);
-        n.g.style.opacity = n.o;
-        continue;
-      }
+/* =====================================================================
+   TIMELINE
+   compile() runs every step's choreography once, on a planning clock, and records:
+   - for each node, a list of records, each in force from its time t until the next one
+     (a still position, or a tween: straight, along a flight route, or fading out and back in elsewhere);
+   - the camera, the highlight, the flight trail, the surface order and the movement paths as timed events.
+   Each step is one segment; segment i leads from state i to state i+1 and lasts T ms.
+   ===================================================================== */
+// a node at time u, from the record in force
+function evalRec(r, u){
+  const s = {x:r.x, y:r.y, o:r.o, eo:1, hide:false, tO:1, gone:false}, tw = r.tw;
+  if (tw){
+    const p = clamp01((u - tw.start)/tw.dur), e = ease(p);
+    if (tw.reappear){
+      // fade out where it is, then fade back in at its new place (the label it leaves is taken over by X′)
+      const back = p >= .5;
+      s.x = back ? tw.tx : tw.fx; s.y = back ? tw.ty : tw.fy;
+      s.o = back ? (p - .5)/.5 : tw.fo*Math.max(0, 1 - p/.4);
+      s.hide = !back; // its new branches exist only once it stands at its new place
+    } else {
       if (tw.route){
+        // the whole constituent travels rigidly along the root's route
         const b = bez(tw.route, e);
-        n.x = b.x + tw.rel0.x + (tw.rel1.x - tw.rel0.x)*e;
-        n.y = b.y + tw.rel0.y + (tw.rel1.y - tw.rel0.y)*e;
-      } else {
-        n.x = tw.fx + (tw.tx - tw.fx)*e;
-        n.y = tw.fy + (tw.ty - tw.fy)*e;
-      }
-      const po = n.delayO ? Math.max(0, (p - n.delayO)/(1 - n.delayO)) : p;
-      n.o = tw.fo + (tw.to - tw.fo)*po;
-      n.eo = tw.late ? (p >= 1 ? 1 : 0) : 1;
-      if (p >= 1){ n.tw = null; n.delayO = 0; if (n.dead){ n.g.remove(); n.edge.remove(); live.delete(k); continue; } }
+        s.x = b.x + tw.rel0.x + (tw.rel1.x - tw.rel0.x)*e;
+        s.y = b.y + tw.rel0.y + (tw.rel1.y - tw.rel0.y)*e;
+      } else { s.x = tw.fx + (tw.tx - tw.fx)*e; s.y = tw.fy + (tw.ty - tw.fy)*e; }
+      const a = p < 1 ? r.delayO : 0; // a late arrival fades in over the last part of its tween
+      s.o = tw.fo + (tw.to - tw.fo)*(a ? Math.max(0, (p - a)/(1 - a)) : p);
+      s.eo = tw.late ? (p >= 1 ? 1 : 0) : 1; // a moved phrase's new branch appears as it lands
+      s.gone = r.dead && p >= 1;
     }
-    n.g.setAttribute('transform', `translate(${n.x.toFixed(1)},${n.y.toFixed(1)})`);
-    n.g.style.opacity = n.o;
   }
-  for (const n of live.values()){
-    const P = n.parent && live.get(n.parent);
-    if (!P){ n.edge.style.opacity = 0; continue; }
-    n.edge.setAttribute('x1', P.x); n.edge.setAttribute('y1', P.y + 8);
-    n.edge.setAttribute('x2', n.x); n.edge.setAttribute('y2', n.y - topOff(n.t));
-    n.edge.style.opacity = P.hideKids ? 0 : (n.keepEdge ? P.o : Math.min(n.o, P.o)) * n.eo;
+  if (r.xf) s.tO = clamp01((u - r.xf.start)/r.xf.dur); // label text fading in where another label stood
+  return s;
+}
+const evalCam = (c, u) => { const e = ease(clamp01((u - c.t)/c.dur)), A = c.from, B = c.to;
+  return {x:A.x + (B.x - A.x)*e, y:A.y + (B.y - A.y)*e, w:A.w + (B.w - A.w)*e, h:A.h + (B.h - A.h)*e}; };
+const evalHalo = (h, u) => h.from + (h.to - h.from)*clamp01((u - h.t)/h.dur);
+// the last event at or before u (lists are in time order)
+function latest(list, u){ let r = null; for (const e of list){ if (e.t > u) break; r = e; } return r; }
+// a node's record in force at u: a new record takes over just after its time, so at the very moment
+// a phase begins (and at a step's boundary) the picture is still the previous phase's end
+function recordAt(track, u){ let r = null; for (const e of track){ if (e.t >= 0 && e.t >= u) break; r = e; } return r; }
+const still = (s, r) => ({t:-1, x:s.x, y:s.y, o:s.o, tw:null, parent:r.parent, n:r.n, keepEdge:r.keepEdge, delayO:0, flying:r.flying, dead:false, xf:null});
+
+/* Movement paths shown with "Paths": each one is the curve its flight took (same depth, same vertical
+   ends), from the trace to where the phrase went; only the end points follow the tree as it re-forms. */
+function chainsFor(i){
+  const ch = states.slice(1, i + 1).filter(s => s.move).map(s => ({...s.move}));
+  ch.forEach((m, j) => {
+    const later = ch.slice(j + 1).find(b => b.item === m.item);
+    m.to = later ? 't' + later.n : m.item; // a phrase moved again: this leg ends at its next trace
+  });
+  return ch;
+}
+/* Where the camera rests at the end of each step (narrow screens frame part of the tree). */
+function restFocus(i, L){
+  if (compact && i === states.length - 1) return null; // the finished tree is shown whole
+  if (i === 0) return topOf(L);
+  const s = states[i];
+  if (s.move) return around(L, [s.move.agr, ...(L.get(s.move.item).desc || [s.move.item])]);
+  const before = new Set(layout(states[i - 1].tree).keys());
+  return around(L, [...L.keys()].filter(k => !before.has(k)));
+}
+
+function compile(){
+  const L0 = layout(states[0].tree), segs = [], B = [0];
+  let nodes = new Map([...L0.values()].map(r => [r.k, still({x:r.x, y:r.y, o:1}, {parent:r.parent, n:r.n, keepEdge:false, flying:false})]));
+  let cam = frameBox(boundsOf(L0.values()), topOf(L0));
+  for (let i = 0; i < states.length - 1; i++){
+    const seg = planStep(i, nodes, cam);
+    segs.push(seg); B.push(B[i] + seg.T);
+    nodes = seg.endNodes; cam = seg.endCam;
   }
-  // halo around the moving constituent
-  const ho = haloOpacity(now);
-  if (ho > 0.01 && halo.keys){
+  return {segs, B, chains: states.map((s, i) => chainsFor(i))};
+}
+
+// one step's choreography, on the planning clock t
+function planStep(i, start, startCam){
+  let t = 0;
+  const tracks = new Map([...start].map(([k, r]) => [k, [r]]));
+  const last = k => { const tr = tracks.get(k); return tr && tr[tr.length - 1]; };
+  const now = k => { const r = last(k); if (!r) return null; const s = evalRec(r, t); return s.gone ? null : s; };
+  const push = (k, r) => { if (!tracks.has(k)) tracks.set(k, []); tracks.get(k).push(r); };
+  const cams = [{t:-1, from:startCam.box, to:startCam.box, dur:1, full:startCam.full}];
+  const camTo = (b, dur, focus) => { const f = frameBox(b, focus); cams.push({t, from:evalCam(cams.at(-1), t), to:f.box, dur, full:f.full}); };
+  const halos = [{t:-1, keys:null, color:null, from:0, to:0, dur:1}];
+  const haloTo = (keys, color, to, dur) => { const h = halos.at(-1); halos.push({t, keys:keys || h.keys, color:color || h.color, from:evalHalo(h, t), to, dur}); };
+  const rows = [{t:-1, order:lin(states[i].tree)}], chains = [{t:-1, i}], trails = [];
+  const fresh = L => [...L.keys()].filter(k => !now(k));
+  // shift a layout so that node `key` stays exactly where it is now: existing structure stays put
+  const anchorTo = (L, key) => { const a = now(key), b = L.get(key); if (a && b){ const dx = a.x - b.x, dy = a.y - b.y; for (const r of L.values()){ r.x += dx; r.y += dy; } } return L; };
+  const shift = (L, from, to) => { const dx = to.x - from.x, dy = to.y - from.y; for (const r of L.values()){ r.x += dx; r.y += dy; } return L; };
+  // every node takes up its place in `lay`; new ones fade in, missing ones fade out
+  function scene(lay, opt = {}){
+    const dur = opt.dur || 600, moved = new Set(opt.moved || []);
+    for (const rec of lay.values()){
+      const prev = last(rec.k), cur = prev && now(rec.k), born = !cur;
+      let fx, fy, fo, delayO = 0, xf = born ? null : prev.xf;
+      if (born){
+        fx = rec.x; fy = rec.y - (rec.t === 'trace' || opt.inPlace ? 0 : 14); fo = 0;
+        // appearing in place of an existing label: the node (and its branches) are solid at once, only the text fades in
+        if (rec.k === opt.crossfade){ fo = 1; xf = {start:t, dur:dur*.45}; }
+        else if (rec.t === 'trace' || opt.lateNew) delayO = opt.lateNew || .45;
+      } else { fx = cur.x; fy = cur.y; fo = cur.o; }
+      const reparent = !born && prev.parent !== rec.parent;
+      const tw = {fx, fy, fo, tx:rec.x, ty:rec.y, to:1, start:t, dur, late:reparent && moved.has(rec.k), reappear:rec.k === opt.reappear};
+      if (moved.has(rec.k) && opt.route){
+        const R = opt.route;
+        tw.route = R; tw.rel0 = {x:fx - R.p0.x, y:fy - R.p0.y}; tw.rel1 = {x:rec.x - R.p3.x, y:rec.y - R.p3.y};
+      }
+      // a trace left by a move takes over the departing phrase's branch at once, so the branch never blinks out
+      push(rec.k, {t, tw, parent:rec.parent, n:rec.n, keepEdge:born && rec.t === 'trace' && !!opt.route, delayO, flying:moved.has(rec.k), dead:false, xf});
+    }
+    for (const k of [...tracks.keys()]){
+      if (lay.has(k)) continue;
+      const prev = last(k), cur = now(k);
+      if (!cur) continue;
+      const fixed = {fx:cur.x, fy:cur.y, fo:cur.o, tx:cur.x, ty:cur.y, to:0};
+      const running = prev.tw && t < prev.tw.start + prev.tw.dur;
+      // fadeLate: leave as the moving phrase arrives (keeping its branch until then)
+      push(k, {t, tw: opt.fadeLate ? {...fixed, start:t + dur*.85, dur:dur*.15} : {...fixed, start:t, dur:Math.min(dur, 450)},
+               parent:prev.parent, n:prev.n, keepEdge:opt.fadeLate ? true : prev.keepEdge, delayO:running ? prev.delayO : 0,
+               flying:prev.flying, dead:true, xf:prev.xf});
+    }
+    return dur;
+  }
+
+  const next = states[i + 1];
+  let endL;
+  if (!next.move){
+    // External Merge: the existing tree (now the complement) keeps its place; the new
+    // head, specifier and projections fade in around it at the upper left
+    if (next.specMerge){
+      // A specifier merges: the old YP keeps its place and becomes Y′, the new YP and its Spec grow at the upper left
+      const K = next.specMerge, L = layout(next.tree);
+      shift(L, L.get(K + 'b'), now(K));
+      camTo(boundsOf(L.values()), 1000, around(L, fresh(L)));
+      t += scene(L, {dur:1000, inPlace:true, crossfade:K + 'b', reappear:K, lateNew:.55});
+      endL = L;
+    } else {
+      const L = anchorTo(layout(next.tree), states[i].tree.k);
+      camTo(boundsOf(L.values()), 700, around(L, fresh(L)));
+      t += scene(L, {dur:700, inPlace:true});
+      endL = L;
+    }
+    rows.push({t, order:lin(next.tree)});
+  } else {
+    // 1. Internal Merge begins: Agr′ appears and room opens for the Spec (dashed marker = landing site).
+    // The old AgrP, now Agr′, keeps its exact position: the new AgrP and the Spec grow out at the upper left.
+    const A = next.move.agr, item = next.move.item, preLay = layout(next.pre);
+    shift(preLay, preLay.get(A + 'b'), now(A));
+    camTo(boundsOf(preLay.values()), 1000, around(preLay, fresh(preLay)));
+    t += scene(preLay, {dur:1000, inPlace:true, crossfade:A + 'b', reappear:A, lateNew:.55});
+    // 2. highlight the constituent that will move
+    haloTo(preLay.get(item).desc, ITEMC[item], 1, 300);
+    t += 650;
+    // 3. move it along a curve under the crossed material into the open Spec; nothing else moves
+    const lay = layout(next.tree), it = lay.get(item);
+    const {R, rel, to} = planFlight(preLay, lay, item); // (same depth as next.move.depth: the layouts differ only by a shift)
+    const flight = new Map();
+    for (const [k, r] of lay){
+      const p = rel.has(k) ? {x:to.x + rel.get(k).x, y:to.y + rel.get(k).y}
+              : k === 't' + next.move.n ? preLay.get(item) : preLay.get(k);
+      flight.set(k, {...r, x:p.x, y:p.y});
+    }
+    const dur = 1500, flightBox = [];
+    for (let s = 0; s <= 1; s += .05){ const b = bez(R, s); for (const r of rel.values()) flightBox.push({t:r.t, x:b.x + r.x, y:b.y + r.y}); }
+    camTo(boundsOf([...preLay.values(), ...flightBox]), dur*.45, boundsOf([...flightBox, preLay.get(A), preLay.get(item)]));
+    trails.push({start:t, dur, R, color:ITEMC[item], fade:t + dur});
+    t += scene(flight, {dur, moved:it.desc, route:R, fadeLate:true});
+    chains.push({t, i:i + 1});
+    rows.push({t, order:lin(next.tree)});
+    haloTo(null, null, 0, 350);
+    // 4. the tree re-forms around the new Spec and returns to the centre of view
+    t += 250;
+    anchorTo(lay, item); // the phrase that just landed stays put while the rest closes up
+    camTo(boundsOf(lay.values()), 800, around(lay, [A, ...(lay.get(item).desc || [item])]));
+    t += scene(lay, {dur:800});
+    endL = lay;
+  }
+  // after the last step, narrow screens pull back to show the finished tree whole
+  if (compact && i + 1 === states.length - 1){ camTo(boundsOf(endL.values()), 900); t += 900; }
+
+  const endNodes = new Map();
+  for (const k of tracks.keys()){ const s = now(k); if (s) endNodes.set(k, still(s, last(k))); }
+  return {T:t, tracks, cams, halos, rows, chains, trails, endNodes, endCam:{box:evalCam(cams.at(-1), t), full:cams.at(-1).full}};
+}
+
+/* =====================================================================
+   DRAWING — the picture at play head g
+   ===================================================================== */
+let TL = null;             // the compiled timeline of the current derivation
+let G = 0;                 // play head (ms)
+const els = new Map();     // node key → its SVG elements
+let shown = new Map();     // node key → its state in the last frame drawn
+let view = null, viewFull = null, rowSig = '';
+let showPaths = false;
+const gM = $('gMini');
+const lastState = () => states.length - 1;
+// the segment that g falls in, and the time within it
+function locate(g){
+  let i = TL.segs.length - 1;
+  while (i > 0 && g < TL.B[i]) i--;
+  return {i, u:Math.min(Math.max(g - TL.B[i], 0), TL.segs[i].T)};
+}
+function draw(g){
+  const {i, u} = locate(g), seg = TL.segs[i];
+  // camera
+  const ce = latest(seg.cams, u);
+  view = evalCam(ce, u); viewFull = ce.full;
+  svgEl.setAttribute('viewBox', `${view.x.toFixed(1)} ${view.y.toFixed(1)} ${view.w.toFixed(1)} ${view.h.toFixed(1)}`);
+  // nodes
+  const st = new Map();
+  for (const [k, tr] of seg.tracks){
+    const r = recordAt(tr, u); if (!r) continue;
+    const s = evalRec(r, u); if (s.gone) continue;
+    s.r = r; s.t = r.n.t; st.set(k, s);
+  }
+  for (const [k, el] of els) if (!st.has(k)){ el.g.remove(); el.edge.remove(); els.delete(k); }
+  for (const [k, s] of st){
+    let el = els.get(k);
+    if (!el){
+      const g = drawNode({n:s.r.n}), e = document.createElementNS(NS, 'line');
+      e.setAttribute('class', 'edge'); gN.appendChild(g); gE.appendChild(e);
+      els.set(k, el = {g, edge:e});
+    }
+    el.n = s.r.n; styleLabel(el);
+    el.g.setAttribute('transform', `translate(${s.x.toFixed(1)},${s.y.toFixed(1)})`);
+    el.g.style.opacity = s.o;
+    el.g.classList.toggle('flying', s.r.flying);
+    const tx = el.g.querySelector('text'), to = s.tO < 1 ? s.tO.toFixed(3) : '';
+    if (tx && tx.style.opacity !== to) tx.style.opacity = to;
+  }
+  for (const [k, s] of st){
+    const el = els.get(k), P = s.r.parent && st.get(s.r.parent);
+    if (!P){ el.edge.style.opacity = 0; continue; }
+    el.edge.setAttribute('x1', P.x); el.edge.setAttribute('y1', P.y + 8);
+    el.edge.setAttribute('x2', s.x); el.edge.setAttribute('y2', s.y - topOff(s.t));
+    el.edge.style.opacity = P.hide ? 0 : (s.r.keepEdge ? P.o : Math.min(s.o, P.o)) * s.eo;
+  }
+  shown = st;
+  // highlight around the moving constituent
+  const he = latest(seg.halos, u), ho = evalHalo(he, u);
+  if (ho > 0.01 && he.keys){
     let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
-    for (const k of halo.keys){ const n = live.get(k); if (!n || n.dead) continue;
+    for (const k of he.keys){ const n = st.get(k); if (!n) continue;
       const w = n.t === 'chip' ? CH[0] + 2 : 18, h = n.t === 'chip' ? CH[1] + 2 : 11;
       x0 = Math.min(x0, n.x - w); x1 = Math.max(x1, n.x + w); y0 = Math.min(y0, n.y - h); y1 = Math.max(y1, n.y + h); }
     gH.innerHTML = x0 < 1e9 ? `<rect class="halo" x="${x0-7}" y="${y0-6}" width="${x1-x0+14}" height="${y1-y0+12}" rx="14"
-      style="fill:color-mix(in srgb, ${halo.color} 12%, transparent);stroke:${halo.color};opacity:${ho}"/>` : '';
+      style="fill:color-mix(in srgb, ${he.color} 12%, transparent);stroke:${he.color};opacity:${ho}"/>` : '';
   } else gH.innerHTML = '';
   drawMini();
   let html = '';
-  // optional: every movement chain, drawn along the same under-route the flight used
-  if (showPaths) chains.forEach(m => {
-    const A = live.get('t' + m.n), B = live.get(m.to);
-    if (!A || !B || A.dead || B.dead || m.depth === undefined) return;
+  // optional: every movement path so far, along the curve its flight took
+  if (showPaths) TL.chains[latest(seg.chains, u).i].forEach(m => {
+    const A = st.get('t' + m.n), B = st.get(m.to);
+    if (!A || !B) return;
     // the flight's own curve (node centre to node centre), drawn from just below the trace to just below the landed phrase:
     // both ends of the curve are vertical, so trimming them along that line keeps the shape
     const R = route({x:A.x, y:A.y}, {x:B.x, y:B.y}, m.depth);
@@ -815,31 +941,31 @@ function render(now){
       <circle cx="${R.p0.x}" cy="${R.p0.y}" r="2.2" style="fill:${c};opacity:${op}"/>
       <path class="chain-h" d="M${to.x-4} ${to.y+6} L${to.x} ${to.y} L${to.x+4} ${to.y+6}" style="stroke:${c};opacity:${op}"/>`;
   });
-  // fading trail behind the constituent in flight
-  if (trail){
-    const p = Math.min(1, (now - trail.start)/trail.dur);
-    const f = trail.fade ? 1 - Math.min(1, (now - trail.fade)/600) : 1;
-    if (f <= 0) trail = null;
-    else html += `<path class="trail" pathLength="1" stroke-dasharray="${ease(p)} 1" d="${routeD(trail.R)}" style="stroke:${trail.color};opacity:${.55*f}"/>`;
+  // the trail behind the constituent in flight, fading once it has landed
+  for (const tr of seg.trails){
+    if (u <= tr.start) continue;
+    const p = clamp01((u - tr.start)/tr.dur), f = u < tr.fade ? 1 : 1 - (u - tr.fade)/600;
+    if (f > 0) html += `<path class="trail" pathLength="1" stroke-dasharray="${ease(p)} 1" d="${routeD(tr.R)}" style="stroke:${tr.color};opacity:${.55*f}"/>`;
   }
   gA.innerHTML = html;
+  // the surface order below the tree
+  const order = latest(seg.rows, u).order, sig = order.join(' ');
+  if (sig !== rowSig){ rowSig = sig; setRow(order); }
 }
-requestAnimationFrame(frame);
 
 // minimap (narrow screens, while the camera shows only part of the tree): fixed on-screen size, top right
-const gM = $('gMini');
 function drawMini(){
-  const F = camFull, show = compact && F && cam && (cam.w < F.w*.95 || cam.h < F.h*.95);
+  const F = viewFull, cam = view, show = compact && F && cam && (cam.w < F.w*.95 || cam.h < F.h*.95);
   if (!show){ if (gM.innerHTML) gM.innerHTML = ''; return; }
   const er = svgEl.getBoundingClientRect(), px = Math.max(cam.w/(er.width || 1), cam.h/(er.height || 1)); // view units per screen pixel ('meet')
   const mw = 64*px, k = mw / F.w, mh = F.h*k, m = 8*px;
   const ox = cam.x + cam.w - mw - m, oy = cam.y + m;
   const X = x => ox + (x - F.x)*k, Y = y => oy + (y - F.y)*k;
   let h = `<rect class="mini-bg" x="${ox - 3*px}" y="${oy - 3*px}" width="${mw + 6*px}" height="${mh + 6*px}" rx="${6*px}" style="stroke-width:${px}"/>`;
-  for (const n of live.values()){
-    const P = n.parent && live.get(n.parent);
+  for (const n of shown.values()){
+    const P = n.r.parent && shown.get(n.r.parent);
     if (P && n.o > .05) h += `<line class="mini-e" x1="${X(P.x)}" y1="${Y(P.y)}" x2="${X(n.x)}" y2="${Y(n.y)}" style="stroke-width:${px};opacity:${Math.min(n.o, P.o)}"/>`;
-    if (n.t === 'chip' && n.o > .05) h += `<circle cx="${X(n.x)}" cy="${Y(n.y)}" r="${2.2*px}" style="fill:${CAT[n.n.cat].c};opacity:${n.o}"/>`;
+    if (n.t === 'chip' && n.o > .05) h += `<circle cx="${X(n.x)}" cy="${Y(n.y)}" r="${2.2*px}" style="fill:${CAT[n.r.n.cat].c};opacity:${n.o}"/>`;
   }
   h += `<rect class="mini-cam" x="${X(cam.x)}" y="${Y(cam.y)}" width="${cam.w*k}" height="${cam.h*k}" rx="${2*px}" style="stroke-width:${1.3*px}"/>`;
   gM.innerHTML = h;
@@ -864,20 +990,96 @@ function setRow(order){
 }
 
 /* =====================================================================
-   PLAYER
+   PLAYER — moves the play head
+   → (or a click on the tree) and ← (or a right-click on the tree) mirror each other:
+   - at rest: go one step that way (finishing a paused step first);
+   - moving the same way already: fast-forward;
+   - moving the other way: turn round on the spot.
+   Either one also ends autoplay. Pause freezes the picture where it is; Play carries on from there.
+   A dot or a step in the list: glide there through the steps in between.
    ===================================================================== */
-let def, states = [], cur = 0, speed = 1, playing = false, token = 0;
-const wait = ms => new Promise(r => vwaits.push({t:vnow + ms, r}));
+let def, states = [], cur = 0, speed = 1, playing = false;
+let goal = null;           // the state the play head is heading for
+let rate = 1, glide = 1;   // fast-forward factor; extra speed when gliding across several steps
+let dwell = 0, lastReal = null;
+const RUSH = 4, PAUSE = 380;
+const stateAt = g => { let s = 0; while (s < lastState() && TL.B[s + 1] <= g) s++; return s; }; // the last state reached
 
-/* Movement paths shown with "Paths": each one is the curve its flight took (same depth, same vertical
-   ends), from the trace to where the phrase went; only the end points follow the tree as it re-forms. */
-function setChainsUpTo(i){
-  chains = states.slice(1, i + 1).filter(s => s.move).map(s => ({...s.move}));
-  chains.forEach((m, j) => {
-    const later = chains.slice(j + 1).find(b => b.item === m.item);
-    m.to = later ? 't' + later.n : m.item; // a phrase moved again: this leg ends at its next trace
-  });
+function frame(real){
+  const dt = lastReal === null ? 0 : Math.min(100, real - lastReal);
+  lastReal = real;
+  if (TL){
+    if (goal !== null){
+      const target = TL.B[goal], dir = Math.sign(target - G);
+      G += dir*dt*speed*rate*glide;
+      if (dir === 0 || (dir > 0 ? G >= target : G <= target)){ G = target; arrive(); }
+    } else if (playing){
+      dwell -= dt*speed;
+      if (dwell <= 0){ if (!atEnd()) goal = stateAt(G) + 1; else playing = false; }
+    }
+    draw(G);
+    syncUI();
+  }
+  requestAnimationFrame(frame);
 }
+function arrive(){
+  goal = null; rate = 1; glide = 1;
+  if (playing){ if (atEnd()) playing = false; else dwell = PAUSE; }
+}
+// the step shown: part-way into a step (forward or paused), that step; going back, the one returned to
+function shownStep(){
+  const s = stateAt(G);
+  return G > TL.B[s] && !(goal !== null && TL.B[goal] < G) ? s + 1 : s;
+}
+const atEnd = () => G >= TL.B[lastState()];
+let uiSig = '';
+function syncUI(){
+  const c = shownStep(), sig = c + '|' + playing + '|' + (goal === null) + '|' + atEnd() + '|' + (G === 0);
+  if (sig === uiSig) return;
+  uiSig = sig; cur = c; updateUI();
+}
+
+function advance(){
+  // during autoplay this takes over: the step under way finishes quickly (or, between steps, the next one
+  // starts now) and autoplay stops; from then on each click is one step
+  playing = false;
+  if (goal !== null){
+    if (TL.B[goal] > G){ rate = RUSH; return; }               // already going forward: fast-forward it
+    glide = 1; rate = 1;
+    goal = Math.min(lastState(), stateAt(G) + 1);             // going back: turn round on the spot
+    return;
+  }
+  if (!atEnd()){ goal = stateAt(G) + 1; rate = 1; }
+}
+function retreat(){
+  if (goal !== null){
+    if (TL.B[goal] < G){ rate = RUSH; return; }               // already going back: fast-forward it
+    playing = false; glide = 1; rate = 1;
+    const s = stateAt(G);
+    goal = G > TL.B[s] ? s : Math.max(0, s - 1);              // turn round on the spot
+    return;
+  }
+  playing = false;
+  const s = stateAt(G);
+  if (G > TL.B[s]) goal = s;                                  // paused part-way: back to the step's start
+  else if (s > 0) goal = s - 1;
+  rate = 1;
+}
+function jump(j){
+  playing = false; rate = 1;
+  const from = shownStep(), steps = Math.abs(j - from), dist = Math.abs(TL.B[j] - G);
+  if (!dist){ goal = null; return; }
+  goal = j;
+  // one step: its own animation; further: glide through the steps in between, in about a second
+  glide = steps <= 1 ? 1 : Math.max(1, dist/(Math.min(1400, 300 + 150*steps)*speed));
+}
+function togglePlay(){
+  if (playing){ playing = false; goal = null; rate = 1; glide = 1; return; } // freeze right here
+  if (atEnd() && goal === null){ G = 0; dwell = 600; }
+  else dwell = 0;
+  playing = true;
+}
+function stop(){ playing = false; goal = null; rate = 1; glide = 1; }
 
 function updateUI(){
   const s = states[cur];
@@ -895,123 +1097,14 @@ function updateUI(){
     else if (r.bottom > b.bottom) sc.scrollBy({top:r.bottom - b.bottom + 4, behavior:'smooth'});
   }
   [...$('dots').children].forEach((d, i) => { d.classList.toggle('cur', i === cur); d.classList.toggle('done', i < cur); });
-  $('prevBtn').disabled = cur === 0;
-  $('nextBtn').disabled = cur >= states.length - 1;
-  $('playBtn').textContent = playing ? 'Pause' : (cur >= states.length - 1 ? 'Replay' : 'Play');
+  $('prevBtn').disabled = G === 0 && goal === null;
+  $('nextBtn').disabled = atEnd() && goal === null;
+  $('playBtn').textContent = playing ? 'Pause' : (atEnd() ? 'Replay' : 'Play');
   const done = cur === states.length - 1;
   $('surfLb').textContent = done ? (def.ok ? 'Surface order' : 'Result') : 'Linear order';
   row.classList.toggle('bad', !def.ok);
   [...$('order').children].forEach((w, i) => w.style.color = done ? CAT[def.order.split(' ')[i]].c : '');
 }
-
-// Shift a fresh layout so that node `key` stays exactly where it is on screen now.
-// Existing structure then stays put, new structure grows around it, and the camera does the centring.
-function anchorTo(L, key){
-  const a = live.get(key), b = L.get(key);
-  if (!a || !b || a.dead) return L;
-  const dx = a.x - b.x, dy = a.y - b.y;
-  for (const r of L.values()){ r.x += dx; r.y += dy; }
-  return L;
-}
-
-function jump(i, dur = 550){
-  cur = Math.max(0, Math.min(states.length - 1, i));
-  haloTo(null, null, 0, 150);
-  trail = null;
-  const L = anchorTo(layout(states[cur].tree), states[cur].tree.k);
-  camTo(boundsOf(L.values()), dur, cur === states.length - 1 ? null : topOf(L));
-  setScene(L, {dur});
-  setChainsUpTo(cur);
-  setRow(lin(states[cur].tree));
-  updateUI();
-}
-
-async function stepForward(my){
-  const next = states[cur + 1];
-  if (!next.move){
-    // External Merge: the existing tree (now the complement) keeps its place; the new
-    // head, specifier and projections fade in around it at the upper left
-    const prevRoot = states[cur].tree.k;
-    cur++; updateUI();
-    if (next.specMerge){
-      // A specifier merges: the old YP keeps its place and becomes Y′, the new YP and its Spec grow at the upper left
-      const K = next.specMerge, L = layout(next.tree), old = live.get(K), bar = L.get(K + 'b');
-      const dx = old.x - bar.x, dy = old.y - bar.y;
-      for (const r of L.values()){ r.x += dx; r.y += dy; }
-      const d = 1000/speed;
-      camTo(boundsOf(L.values()), d, around(L, fresh(L)));
-      await setScene(L, {dur:d, inPlace:true, crossfade:K + 'b', reappear:K, lateNew:.55});
-      setRow(lin(next.tree));
-      return settle(L, my);
-    }
-    const L = anchorTo(layout(next.tree), prevRoot);
-    camTo(boundsOf(L.values()), 700/speed, around(L, fresh(L)));
-    await setScene(L, {dur:700/speed, inPlace:true});
-    setRow(lin(next.tree));
-    return settle(L, my);
-  }
-  // 1. Internal Merge begins: Agr′ appears and room opens for the Spec (dashed marker = landing site)
-  cur++; updateUI();
-  // Lay out the new structure so that the old AgrP, now Agr′, keeps its exact position:
-  // nothing that already exists moves; the new AgrP and the Spec grow out at the upper left.
-  const preLay = layout(next.pre), A = next.move.agr, oldTop = live.get(A), bar = preLay.get(A + 'b');
-  const dx = oldTop.x - bar.x, dy = oldTop.y - bar.y;
-  for (const r of preLay.values()){ r.x += dx; r.y += dy; }
-  const growDur = 1000/speed;
-  camTo(boundsOf(preLay.values()), growDur, around(preLay, fresh(preLay)));
-  await setScene(preLay, {dur:growDur, inPlace:true, crossfade:A + 'b', reappear:A, lateNew:.55});
-  if (my !== token) return false;
-  // 2. highlight the constituent that will move
-  const item = next.move.item;
-  haloTo(preLay.get(item).desc, ITEMC[item], 1, 300/speed);
-  await wait(650/speed);
-  if (my !== token) return false;
-  // 3. move it along a curve under the crossed material into the open Spec; nothing else moves
-  const lay = layout(next.tree), it = lay.get(item);
-  const {R, rel, to} = planFlight(preLay, lay, item); // (same depth as next.move.depth: the layouts differ only by a shift)
-  const scene = new Map();
-  for (const [k, r] of lay){
-    const p = rel.has(k) ? {x:to.x + rel.get(k).x, y:to.y + rel.get(k).y}
-            : k === 't' + next.move.n ? preLay.get(item) : preLay.get(k);
-    scene.set(k, {...r, x:p.x, y:p.y});
-  }
-  const dur = 1500/speed;
-  // keep the whole flight on screen
-  const flightBox = [];
-  for (let t = 0; t <= 1; t += .05){ const b = bez(R, t); for (const r of rel.values()) flightBox.push({t:r.t, x:b.x + r.x, y:b.y + r.y}); }
-  camTo(boundsOf([...preLay.values(), ...flightBox]), dur*.45, boundsOf([...flightBox, preLay.get(A), preLay.get(item)]));
-  trail = {R, color:ITEMC[item], start:vnow, dur};
-  await setScene(scene, {dur, moved:it.desc, route:R, fadeLate:true});
-  if (trail) trail.fade = vnow;
-  setChainsUpTo(cur);
-  setRow(lin(next.tree));
-  haloTo(null, null, 0, 350/speed);
-  if (my !== token) return false;
-  // 4. the tree re-forms around the new Spec and returns to the centre of view
-  await wait(250/speed);
-  if (my !== token) return false;
-  anchorTo(lay, item); // the phrase that just landed stays put while the rest closes up
-  camTo(boundsOf(lay.values()), 800/speed, around(lay, [A, ...(lay.get(item).desc || [item])]));
-  await setScene(lay, {dur:800/speed});
-  return settle(lay, my);
-}
-// after the last step, narrow screens pull back to show the finished tree whole
-function settle(L, my){
-  if (my === token && compact && cur === states.length - 1) camTo(boundsOf(L.values()), 900/speed);
-  return my === token;
-}
-async function play(){
-  if (cur >= states.length - 1){ jump(0); await wait(600); }
-  const my = ++token; playing = true; busy = false; rate = 1; updateUI();
-  while (cur < states.length - 1){
-    if (!await stepForward(my)) return;
-    rate = 1; // a click only fast-forwards the step it was made in
-    await wait(380/speed);
-    if (my !== token) return;
-  }
-  playing = false; updateUI();
-}
-function stop(){ token++; playing = false; busy = false; rate = 1; }
 
 // portrait layouts size the stage box once per derivation (the camera zooms inside it)
 function fitView(){
@@ -1019,14 +1112,15 @@ function fitView(){
   const w = Math.max(b.x1 - b.x0 + 36, 480), h = Math.max(b.y1 - b.y0 + 36, 240);
   // narrow screens: a squarer box, since the camera frames parts of the tree at reading size anyway
   svgEl.style.setProperty('--ar', compact ? `${Math.min(w/h, 1.15)} / 1` : `${w} / ${h}`);
-  cam = null;
 }
+function clearStage(){ for (const el of els.values()){ el.g.remove(); el.edge.remove(); } els.clear(); rowSig = ''; uiSig = ''; }
 
 function select(L, autoplay = true){
   stop();
   def = ORDERS.find(o => o.L === L);
   states = buildStates(def);
   fitView();
+  TL = compile(); G = 0;
   document.querySelectorAll('.or').forEach(b => b.classList.toggle('sel', b.dataset.l === L));
   $('order').innerHTML = def.order.split(' ').map(w => `<span>${w}</span>`).join('');
   $('status').innerHTML = def.ok
@@ -1051,17 +1145,15 @@ function select(L, autoplay = true){
     const c = s.move ? ITEMC[s.move.item] : '';
     const tag = s.bad ? `<span class="ty bd">✕ Merge</span>` : s.move ? `<span class="ty mv" style="--c:${c}">Move</span>` : `<span class="ty">Merge</span>`;
     li.innerHTML = `<span class="n">${i+1}</span><div><div class="tt">${tag}<span>${s.title.replace(/_(\w)/g,'<sub>$1</sub>')}</span></div><div class="tx">${s.tx}</div></div>`;
-    li.onclick = () => { stop(); jump(i); };
+    li.onclick = () => jump(i);
     ol.append(li);
   });
   const dots = $('dots'); dots.innerHTML = '';
-  states.forEach((s, i) => { const d = document.createElement('button'); d.title = `Step ${i+1}`; d.onclick = () => { stop(); jump(i); }; dots.append(d); });
-  // reset the stage
-  for (const n of live.values()){ n.g.remove(); n.edge.remove(); }
-  live.clear(); chains = []; trail = null; halo = null;
-  jump(0, 500);
-  if (autoplay) setTimeout(() => { if (def.L === L && cur === 0 && !playing) play(); }, 700);
+  states.forEach((s, i) => { const d = document.createElement('button'); d.title = `Step ${i+1}`; d.onclick = () => jump(i); dots.append(d); });
+  clearStage();
+  if (autoplay) setTimeout(() => { if (def.L === L && G === 0 && !playing && goal === null) togglePlay(); }, 700);
 }
+requestAnimationFrame(frame);
 
 /* =====================================================================
    ORDERS TABLE + CONTROLS
@@ -1081,38 +1173,70 @@ for (let b = 0; b < 6; b++){
   table.append(blk);
 }
 
-$('playBtn').onclick = () => { if (playing){ stop(); updateUI(); } else play(); };
-/* Next / click on the tree. While a step is animating, a click does not cut it short or skip ahead:
-   it fast-forwards the rest of that step along the same paths. The next click then advances.
-   During autoplay a click fast-forwards the current step. */
-const RUSH = 4;
-let busy = false;
-// (called directly by clicks on the tree and the → key: the Next button is disabled on the last step,
-// but the last step's animation must still be fast-forwardable)
-async function advance(){
-  if (playing || busy){ rate = RUSH; return; }
-  if (cur >= states.length - 1) return;
-  const my = ++token; busy = my; rate = 1;
-  await stepForward(my);
-  if (busy === my){ busy = false; rate = 1; }
-  if (my === token) updateUI();
-}
+$('playBtn').onclick = togglePlay;
 $('nextBtn').onclick = advance;
-$('prevBtn').onclick = () => { stop(); jump(cur - 1); };
+$('prevBtn').onclick = retreat;
+// the dots double as a scrubber: drag along them to move the play head by hand (between two dots = part-way
+// through that step). Near a dot the play head snaps onto it, and on release it settles on the nearest dot,
+// so a drag always ends on a whole step. A plain click still glides to a dot.
+(() => {
+  const box = $('dots'), SNAP = .15, SETTLE = 250;
+  let drag = null, swallow = false;
+  const gAt = x => {
+    const c = [...box.children].map(d => { const r = d.getBoundingClientRect(); return r.left + r.width/2; });
+    if (x <= c[0]) return 0;
+    for (let i = 0; i < c.length - 1; i++) if (x <= c[i + 1]){
+      let f = (x - c[i])/(c[i + 1] - c[i]);
+      if (f < SNAP) f = 0; else if (f > 1 - SNAP) f = 1; // magnetic near the dots
+      return TL.B[i] + f*(TL.B[i + 1] - TL.B[i]);
+    }
+    return TL.B[c.length - 1];
+  };
+  box.addEventListener('pointerdown', e => { swallow = false; if (e.button === 0) drag = {x0:e.clientX, id:e.pointerId, on:false}; });
+  box.addEventListener('pointermove', e => {
+    if (!drag || e.pointerId !== drag.id) return;
+    if (!drag.on){
+      if (Math.abs(e.clientX - drag.x0) < 4) return; // not a drag yet: may still be a click
+      drag.on = true; box.classList.add('scrub');
+      try { box.setPointerCapture(e.pointerId); } catch (err) {} // keep following the pointer outside the strip
+    }
+    stop(); G = gAt(e.clientX);
+  });
+  const end = e => {
+    if (!drag || e.pointerId !== drag.id) return;
+    if (drag.on){
+      swallow = true; box.classList.remove('scrub');
+      // settle on the nearest dot, quickly
+      const s = stateAt(G), j = s < lastState() && G - TL.B[s] > (TL.B[s + 1] - TL.B[s])/2 ? s + 1 : s;
+      const dist = Math.abs(TL.B[j] - G);
+      if (dist){ goal = j; rate = 1; glide = Math.max(1, dist/(SETTLE*speed)); }
+    }
+    drag = null;
+  };
+  box.addEventListener('pointerup', end); box.addEventListener('pointercancel', end);
+  // the click that ends a drag is not a click on a dot
+  box.addEventListener('click', e => { if (swallow){ swallow = false; e.stopPropagation(); e.preventDefault(); } }, true);
+  // a click on the strip around the dots (above, below, between them) goes to the nearest dot
+  box.addEventListener('click', e => {
+    if (e.target !== box) return; // the dots handle their own clicks
+    const c = [...box.children].map(d => { const r = d.getBoundingClientRect(); return Math.abs(r.left + r.width/2 - e.clientX); });
+    jump(c.indexOf(Math.min(...c)));
+  });
+})();
 // crossing the narrow/wide threshold redraws the tree in the other geometry at the same step
 function regeometry(){
   if (NARROW.matches === compact) return;
   setGeometry(NARROW.matches);
   if (!def) return;
-  const at = cur, was = playing;
+  const at = shownStep(), was = playing;
   stop();
   states = buildStates(def); // slot widths depend on the geometry
-  fitView();
-  for (const n of live.values()){ n.g.remove(); n.edge.remove(); }
-  live.clear(); trail = null; halo = null;
-  jump(at, 0);
-  if (was) play();
+  fitView(); TL = compile(); G = TL.B[at]; clearStage();
+  playing = was; dwell = PAUSE;
 }
+// narrow screens frame the tree by the stage's size: re-plan the camera when it changes
+let refit = 0;
+addEventListener('resize', () => { if (!compact || !def) return; clearTimeout(refit); refit = setTimeout(() => { TL = compile(); }, 150); });
 NARROW.addEventListener('change', regeometry);
 // portrait: tap the caption to open or close the explanation (it stays open across steps until closed)
 const CAPQ = matchMedia('(max-aspect-ratio:1/1), (max-width:700px)'), SHORT = matchMedia('(min-aspect-ratio:1/1) and (max-height:500px)');
@@ -1130,8 +1254,12 @@ addEventListener('resize', syncCaption);
 syncCaption();
 addEventListener('resize', regeometry); // some browsers skip the media query's change event
 svgEl.addEventListener('click', e => { if (e.button === 0) advance(); }); // click the derivation to advance
+// right-click the derivation to step back (a mouse's right button only: a long press on a touch screen keeps its menu)
+let rightDown = false;
+svgEl.addEventListener('pointerdown', e => { rightDown = e.button === 2 && e.pointerType === 'mouse'; });
+svgEl.addEventListener('contextmenu', e => { if (!rightDown) return; rightDown = false; e.preventDefault(); retreat(); });
 $('pathsBtn').onclick = () => { showPaths = !showPaths; $('pathsBtn').classList.toggle('on', showPaths); };
-$('resetBtn').onclick = () => { stop(); jump(0); };
+$('resetBtn').onclick = () => jump(0);
 $('speedSeg').onclick = e => {
   const b = e.target.closest('button'); if (!b) return;
   speed = +b.dataset.s;
@@ -1144,7 +1272,7 @@ $('tabs').onclick = e => {
 };
 document.addEventListener('keydown', e => {
   if (e.key === 'ArrowRight'){ e.preventDefault(); advance(); }
-  else if (e.key === 'ArrowLeft'){ e.preventDefault(); $('prevBtn').click(); }
+  else if (e.key === 'ArrowLeft'){ e.preventDefault(); retreat(); }
   else if (e.key === ' '){ e.preventDefault(); $('playBtn').click(); }
   else if (e.key === 'ArrowDown' || e.key === 'ArrowUp'){
     e.preventDefault();

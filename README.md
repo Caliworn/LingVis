@@ -15,7 +15,8 @@ Of the 24 logically possible orders of demonstrative, numeral, adjective and nou
 - **Cyclic, bottom-up derivations.** Each tree is built by external Merge, one layer at a time, with Agr projections above each modifier. Movement is internal Merge into Spec,AgrP and is interleaved with Merge, never applied after the whole tree is built.
 - **Every movement step is classified as in the paper:** NP movement without pied-piping, whose-picture pied-piping (including the vacuous case), picture-of-who pied-piping, re-raising of an already moved phrase, and the extraction step of N Dem A Num. Traces are left behind and co-indexed with what moved.
 - **All 24 orders.** Each attested order shows its marked options and the frequency Cinque reports. Each unattested order is played out from the wrong Merge order it would require, with the offending modifier flagged.
-- **Controls.** Autoplay; click the tree (or press →) to advance, and click during an animation to fast-forward it along the same path; ← to step back; Space to play or pause; R to restart; P to show movement paths.
+- **Controls.** Autoplay. Click the tree (or press →) for the next step; right-click it (or press ←) to play the step in reverse. The two mirror each other: pressing the way the tree is already moving fast-forwards along the same path, pressing the other way turns it round on the spot, and either one takes over from autoplay. Space to play or pause (pausing freezes the picture where it is); click a step or a dot to glide there, or drag along the dots to scrub through the derivation by hand (it snaps to the steps and settles on the nearest one); R to restart; P to show movement paths.
+- **One timeline.** Each derivation is compiled into a single timeline and every frame is computed from one play head, so playing backwards is the exact reverse of playing forwards.
 
 ## Running locally
 
