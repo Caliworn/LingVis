@@ -73,7 +73,10 @@ button{font:inherit;color:inherit}
   body{overflow-y:auto}
   .app{height:auto;grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto auto;
     grid-template-areas:"head" "stage" "tabs" "pane";gap:8px;padding:8px 10px 10px}
-  #paneOrders,#paneSteps{grid-area:pane;height:calc(100vh - 66px);height:calc(100dvh - 66px)}
+  /* one scroll only: the lists run at full length and the page scrolls; the tabs stick to the top */
+  #paneOrders,#paneSteps{grid-area:pane;overflow:visible}
+  .pane .scroll{overflow:visible;flex:none}
+  .tabs{position:sticky;top:0;z-index:10;box-shadow:0 0 0 6px var(--bg)}
   .tabs{display:flex}
   .app[data-tab="orders"] #paneSteps,.app[data-tab="steps"] #paneOrders{display:none}
 }
@@ -196,7 +199,9 @@ button{font:inherit;color:inherit}
   body{overflow-y:auto}
   .app{height:auto;grid-template-columns:minmax(0,1fr);grid-template-rows:auto calc(100dvh - 58px) auto auto;
     grid-template-areas:"head" "stage" "tabs" "pane";gap:8px;padding:8px 12px 12px}
-  #paneOrders,#paneSteps{grid-area:pane;height:calc(100dvh - 70px)}
+  #paneOrders,#paneSteps{grid-area:pane;height:auto;overflow:visible}
+  .pane .scroll{overflow:visible;flex:none}
+  .tabs{position:sticky;top:0;z-index:10;box-shadow:0 0 0 6px var(--bg)}
   .brand h1{font-size:18px}
   .theme-btn{width:28px;height:28px}
   /* the linear order sits under the tree, so the explanation gets the whole right column between title and controls */
