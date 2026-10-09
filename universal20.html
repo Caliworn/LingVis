@@ -107,7 +107,7 @@ button{font:inherit;color:inherit}
 .pill.no{color:var(--bad);background:color-mix(in srgb,var(--bad) 12%,transparent)}
 .pill .f{color:var(--muted);font-weight:500}
 .st-top .spacer{flex:1}
-.stage-svg{flex:1;min-height:0;width:100%;display:block;margin:4px 0;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.stage-svg{flex:1;min-height:0;width:100%;display:block;margin:4px 0;cursor:pointer}
 @media (max-aspect-ratio:1/1), (max-width:700px){
   .stage-card{padding:10px 10px 10px}
   .order{font-size:22px}
@@ -166,6 +166,8 @@ button{font:inherit;color:inherit}
 /* fast clicking must not select text or zoom the page */
 .stage-svg,.st-foot,.tabs,.toggle,.or,ol.steps .n{-webkit-user-select:none;user-select:none}
 .stage-svg,.btn,.seg button,.tabs button,.toggle,.caption{touch-action:manipulation}
+/* no grey/blue tap flash on phones: every control shows its own response (it presses in, lights up or moves on) */
+button,.stage-svg,.dots,.caption,ol.steps li,.scrim{-webkit-tap-highlight-color:transparent}
 
 /* ================= svg tree ================= */
 .lbl{font:600 12.5px 'JetBrains Mono',monospace;fill:var(--muted)}
@@ -277,7 +279,7 @@ ol.steps li.cur .tx{display:block}
 .app.portrait{grid-template-rows:auto auto auto;grid-template-areas:"head" "stage" "pane"}
 .app.portrait .tabs{display:none}
 .app.portrait #paneSteps{display:flex}
-.app.portrait .order-btn{cursor:pointer;-webkit-tap-highlight-color:transparent}
+.app.portrait .order-btn{cursor:pointer}
 /* room for the chevron: Paths stays on the title's line down to 320px */
 .app.portrait .st-top{column-gap:8px}
 .app.portrait .st-top .spacer{display:none}
