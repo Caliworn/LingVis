@@ -68,11 +68,12 @@ button{font:inherit;color:inherit}
   .tabs{display:flex}
   .app[data-tab="orders"] #paneSteps,.app[data-tab="steps"] #paneOrders{display:none}
 }
-/* portrait / narrow: stacked */
+/* portrait / narrow: stacked; the derivation fills the first screen, the lists follow below (the page scrolls) */
 @media (max-aspect-ratio:1/1), (max-width:700px){
-  .app{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto minmax(0,1fr);
+  body{overflow-y:auto}
+  .app{height:auto;grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto auto;
     grid-template-areas:"head" "stage" "tabs" "pane";gap:8px;padding:8px 10px 10px}
-  #paneOrders,#paneSteps{grid-area:pane}
+  #paneOrders,#paneSteps{grid-area:pane;height:calc(100vh - 66px);height:calc(100dvh - 66px)}
   .tabs{display:flex}
   .app[data-tab="orders"] #paneSteps,.app[data-tab="steps"] #paneOrders{display:none}
 }
@@ -107,7 +108,7 @@ button{font:inherit;color:inherit}
 @media (max-aspect-ratio:1/1), (max-width:700px){
   .stage-card{padding:10px 10px 10px}
   .order{font-size:22px}
-  .stage-svg{flex:none;aspect-ratio:var(--ar,700/420);height:auto;max-height:44vh}
+  .stage-svg{flex:none;aspect-ratio:var(--ar,700/420);height:auto;max-height:44vh;max-height:44dvh}
 }
 
 .caption{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:start;padding:9px 12px;border-radius:12px;background:var(--surface-2);min-height:54px}
@@ -1052,7 +1053,7 @@ for (let b = 0; b < 6; b++){
     r.innerHTML = `<span class="mk ${o.ok?'ok':'no'}">${o.ok?'✓':'✕'}</span>
       <span class="tk">${o.order.split(' ').map(k => `<span style="--c:${CAT[k].c}">${k}</span>`).join('')}</span>
       <span class="fq ${o.freq && o.freq.startsWith('very many') ? 'hi':''}">${o.freq || 'Ø'}</span>`;
-    r.onclick = () => select(o.L);
+    r.onclick = () => { select(o.L); if (scrollY > 0) scrollTo({top:0, behavior:'smooth'}); }; // stacked layouts: back up to the tree
     blk.append(r);
   });
   table.append(blk);
