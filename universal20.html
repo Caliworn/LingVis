@@ -529,8 +529,9 @@ function setScene(lay, opt = {}){
   const now = vnow, dur = opt.dur || 600;
   const moved = new Set(opt.moved || []);
   for (const rec of lay.values()){
-    let node = live.get(rec.k);
+    let node = live.get(rec.k), born = false;
     if (!node){
+      born = true;
       const g = drawNode(rec);
       gN.appendChild(g);
       const e = document.createElementNS(NS, 'line'); e.setAttribute('class','edge'); gE.appendChild(e);
@@ -542,7 +543,9 @@ function setScene(lay, opt = {}){
       live.set(rec.k, node);
     } else node.delayO = 0;
     const reparent = node.parent !== undefined && node.parent !== rec.parent;
-    node.n = rec.n; node.parent = rec.parent; node.dead = false; node.keepEdge = false; node.t = rec.t;
+    node.n = rec.n; node.parent = rec.parent; node.dead = false; node.t = rec.t;
+    // a trace left by a move takes over the departing phrase's branch at once, so the branch never blinks out
+    node.keepEdge = born && rec.t === 'trace' && !!opt.route;
     styleLabel(node);
     node.tw = {fx:node.x, fy:node.y, fo:node.o, tx:rec.x, ty:rec.y, to:1, start:now, dur, late: reparent && moved.has(rec.k),
                reappear: rec.k === opt.reappear};
