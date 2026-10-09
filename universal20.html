@@ -857,7 +857,7 @@ async function stepForward(my){
 }
 async function play(){
   if (cur >= states.length - 1){ jump(0); await wait(600); }
-  const my = ++token; playing = true; busy = false; queued = 0; rate = 1; updateUI();
+  const my = ++token; playing = true; busy = false; rate = 1; updateUI();
   while (cur < states.length - 1){
     if (!await stepForward(my)) return;
     rate = 1; // a click only fast-forwards the step it was made in
@@ -866,7 +866,7 @@ async function play(){
   }
   playing = false; updateUI();
 }
-function stop(){ token++; playing = false; busy = false; queued = 0; rate = 1; }
+function stop(){ token++; playing = false; busy = false; rate = 1; }
 
 // portrait layouts size the stage box once per derivation (the camera zooms inside it)
 function fitView(){
@@ -936,27 +936,19 @@ for (let b = 0; b < 6; b++){
 }
 
 $('playBtn').onclick = () => { if (playing){ stop(); updateUI(); } else play(); };
-/* Next / click on the tree. While a step is animating, a click does not cut it short: it fast-forwards
-   the rest of it along the same paths and queues one more step. Queued steps also run fast; the last
-   one the user asked for plays at normal speed. During autoplay a click fast-forwards the current step. */
+/* Next / click on the tree. While a step is animating, a click does not cut it short or skip ahead:
+   it fast-forwards the rest of that step along the same paths. The next click then advances.
+   During autoplay a click fast-forwards the current step. */
 const RUSH = 4;
-let busy = false, queued = 0;
+let busy = false;
 // (called directly by clicks on the tree and the → key: the Next button is disabled on the last step,
 // but the last step's animation must still be fast-forwardable)
 async function advance(){
-  if (playing){ rate = RUSH; return; }
-  if (busy){
-    if (cur + queued < states.length - 1) queued++;
-    rate = RUSH;
-    return;
-  }
+  if (playing || busy){ rate = RUSH; return; }
   if (cur >= states.length - 1) return;
-  const my = ++token; busy = my;
-  while (await stepForward(my) && my === token && queued > 0 && cur < states.length - 1){
-    queued--;
-    rate = queued > 0 ? RUSH : 1;
-  }
-  if (busy === my){ busy = false; queued = 0; rate = 1; }
+  const my = ++token; busy = my; rate = 1;
+  await stepForward(my);
+  if (busy === my){ busy = false; rate = 1; }
   if (my === token) updateUI();
 }
 $('nextBtn').onclick = advance;
