@@ -91,6 +91,21 @@ button{font:inherit;color:inherit}
 .brand h1 em{font-style:normal;background:linear-gradient(90deg,var(--dem),var(--num),var(--a),var(--n));-webkit-background-clip:text;background-clip:text;color:transparent}
 .brand p{margin:0;color:var(--muted);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .theme-btn{border:1px solid var(--line);background:var(--surface);border-radius:999px;width:32px;height:32px;cursor:pointer;flex:none;display:grid;place-items:center;margin-left:auto}
+/* tree notation: a button left of the theme button opens a small panel of options */
+.set-wrap{position:relative;flex:none;margin-left:auto;margin-right:-10px}
+.set-wrap + .theme-btn{margin-left:0}
+.set-btn{border:1px solid var(--line);background:var(--surface);border-radius:999px;width:32px;height:32px;cursor:pointer;display:grid;place-items:center;padding:0;color:inherit}
+.set-btn.on{background:var(--surface-2)}
+.set-pop{display:none;position:absolute;top:calc(100% + 8px);right:-44px;z-index:60;width:min(300px,calc(100vw - 20px));padding:10px;
+  background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
+.set-pop.open{display:block}
+.set-pop h4{margin:2px 6px 6px;font:600 10.5px Inter;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.opt{display:grid;grid-template-columns:16px minmax(0,1fr);column-gap:8px;padding:7px 6px;border-radius:9px;cursor:pointer}
+.opt:hover{background:var(--surface-2)}
+.opt input{margin:3px 0 0;accent-color:var(--ink);cursor:pointer}
+.opt b{font-weight:600;font-size:13px}
+.opt .d{grid-column:2;font-size:11.5px;line-height:1.4;color:var(--muted)}
+.opt code{font:11px 'JetBrains Mono',monospace;color:var(--ink)}
 @media (max-aspect-ratio:1/1), (max-width:700px){.brand p{display:none}.brand h1{font-size:22px}}
 
 /* ================= tabs ================= */
@@ -205,7 +220,7 @@ button,.stage-svg,.dots,.caption,ol.steps li,.scrim{-webkit-tap-highlight-color:
   .pane .scroll{overflow:visible;flex:none}
   .tabs{position:sticky;top:0;z-index:10;box-shadow:0 0 0 6px var(--bg)}
   .brand h1{font-size:18px}
-  .theme-btn{width:28px;height:28px}
+  .theme-btn,.set-btn{width:28px;height:28px}
   /* the linear order sits under the tree, so the explanation gets the whole right column between title and controls */
   /* the dots sit under the tree, in a row of their own that the explanation spans, so it keeps its full height */
   .stage-card{display:grid;grid-template-columns:minmax(0,1fr) clamp(300px,40vw,360px);grid-template-rows:auto minmax(0,1fr) auto auto;column-gap:14px;
@@ -320,6 +335,17 @@ ol.steps li.cur .tx{display:block}
     <div class="brand">
       <h1><a class="crumb" href="index.html" title="Back to LingVis">LingVis</a><span class="sep" aria-hidden="true">/</span>Universal <em>20</em></h1>
       <p>Cinque (2005) · Deriving Greenberg's Universal 20 and its exceptions</p>
+    </div>
+    <div class="set-wrap">
+      <button class="set-btn" id="setBtn" title="Tree notation" aria-label="Tree notation" aria-haspopup="dialog" aria-expanded="false" aria-controls="setPop">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 4.5h7M13 4.5h1M2 11.5h1M7 11.5h7"/><circle cx="11" cy="4.5" r="1.8"/><circle cx="5" cy="11.5" r="1.8"/></svg>
+      </button>
+      <div class="set-pop" id="setPop" role="dialog" aria-label="Tree notation">
+        <h4>Tree notation</h4>
+        <label class="opt"><input type="radio" name="notation" value="seg"><b>Segments</b><span class="d">A specifier adds a segment of the same category: <code>[YP AP [YP Y NP]]</code>. Cinque’s notation in his (10), after Kayne (1994).</span></label>
+        <label class="opt"><input type="radio" name="notation" value="bare"><b>Unlabelled</b><span class="d">The node a specifier merges with has no label, as in Cinque’s trees (2) and (3).</span></label>
+        <label class="opt"><input type="radio" name="notation" value="bar"><b>X-bar</b><span class="d">Bar levels: <code>[YP AP [Y′ Y NP]]</code>. The conventional notation, not Cinque’s.</span></label>
+      </div>
     </div>
     <button class="theme-btn" id="themeBtn" title="Toggle theme" aria-label="Toggle theme">
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="6"/><path d="M8 2a6 6 0 0 0 0 12z" fill="currentColor"/></svg>
@@ -450,13 +476,21 @@ const chip = (cat, bad) => ({k:'c-'+cat, t:'chip', cat, bad: !!bad});
 const NPn = () => ({k:'NP', t:'ph', label:'NP', cat:'N', kids:[chip('N')]});
 const modP = (cat, bad) => ({k:cat+'P', t:'ph', label:cat+'P', cat, kids:[chip(cat, bad)]});
 const head = (k, label) => ({k:'h-'+k, t:'head', label});
-// strictly binary: XP → Spec + X′, X′ → X + Complement
-const bar = (k, label, kids) => ({k, t:'bar', label, kids});
-const FP = (lv, cat, comp) => ({k:lv.fp, t:'fp', label:lv.fp, kids:[modP(cat, cat !== lv.exp), bar(lv.fp+'b', lv.h+'′', [head(lv.h, lv.h), comp])]});
+// Strictly binary. A specifier merges with the projection it is the specifier of; how the node it merges
+// with (key: the projection's own + 'b') is labelled is the reader's choice of notation:
+//   seg  - Cinque's (10), after Kayne (1994): a second segment of the same category, [YP Spec [YP Y Compl]] (default)
+//   bare - Cinque's trees (2) and (3): no label at all
+//   bar  - conventional X-bar theory: [YP Spec [Y′ Y Compl]]
+const NOTATIONS = ['seg', 'bare', 'bar'];
+let notation = 'seg';
+try { const v = localStorage.getItem('lingvis-u20-notation'); if (NOTATIONS.includes(v)) notation = v; } catch (e) {}
+const lowerLabel = (lv, agr) => notation === 'seg' ? (agr ? 'Agr_'+lv.s+'P' : lv.fp) : notation === 'bar' ? (agr ? 'Agr_'+lv.s+'′' : lv.h+'′') : '';
+const seg = (k, label, kids) => ({k, t:'seg', label, kids});
+const FP = (lv, cat, comp) => ({k:lv.fp, t:'fp', label:lv.fp, kids:[modP(cat, cat !== lv.exp), seg(lv.fp+'b', lowerLabel(lv), [head(lv.h, lv.h), comp])]});
 // Agr first merges with its complement (no Spec yet). Internal Merge of a moved phrase then
-// projects again: [AgrP moved [Agr′ Agr Comp]].
+// merges with it: [AgrP moved [AgrP Agr Comp]] (labelled as above).
 const AGR = (lv, comp) => ({k:lv.agr, t:'agr', label:'Agr_'+lv.s+'P', kids:[head('Agr'+lv.s, 'Agr_'+lv.s), comp]});
-const withSpec = (lv, agr, spec) => { agr.kids = [spec, bar(lv.agr+'b', 'Agr_'+lv.s+'′', agr.kids)]; return agr; };
+const withSpec = (lv, agr, spec) => { agr.kids = [spec, seg(lv.agr+'b', lowerLabel(lv, true), agr.kids)]; return agr; };
 
 function find(n, key, parent = null, i = -1){
   if (n.k === key) return {node:n, parent, i};
@@ -510,6 +544,12 @@ function describeMove(tree, item, crossed, s, type, L){
   }
 }
 
+// what becomes of [Y Complement] when a specifier merges, in the reader's notation
+const specNote = (lv, comp) => ({
+  seg: `. ${lv.fp} projects again: [${lv.fp} ${lv.h} ${comp}] is now the lower segment of ${lv.fp}.`,
+  bare: `; [${lv.h} ${comp}] is left as an unlabelled node inside ${lv.fp}.`,
+  bar: `; [${lv.h} ${comp}] becomes ${lv.h}′.`
+})[notation];
 function buildStates(def){
   const S = [];
   let tree = NPn(), n = 0;
@@ -521,11 +561,11 @@ function buildStates(def){
     tree = {k:lv.fp, t:'fp', label:lv.fp, kids:[head(lv.h, lv.h), clone(tree)]};
     S.push({tree, ty:'Merge', title:`Merge ${lv.h}`,
       tx:`${lv.h} merges with ${compLabel.replace(/_(\w)/g, '<sub>$1</sub>')}, projecting ${lv.fp}. It has no specifier yet.`});
-    // 2. The modifier phrase merges as its specifier; the projection just built becomes Y′
+    // 2. The modifier phrase merges as its specifier (the projection just built is labelled by the notation)
     tree = FP(lv, cat, clone(tree.kids[1]));
     S.push({tree, ty:'Merge', bad, specMerge:lv.fp, title:`Merge ${cat}P in Spec,${lv.fp}`,
       tx: bad ? `${cat}P is merged in Spec,${lv.fp}. ✕ The universal Merge order requires ${lv.exp}P here.`
-              : `${cat}P merges as the specifier of ${lv.fp}, the ${['lowest','middle','highest'][li]} modifier layer; [${lv.h} ${compLabel.replace(/_(\w)/g, '<sub>$1</sub>')}] becomes ${lv.h}′.`});
+              : `${cat}P merges as the specifier of ${lv.fp}, the ${['lowest','middle','highest'][li]} modifier layer` + specNote(lv, compLabel.replace(/_(\w)/g, '<sub>$1</sub>'))});
     // External Merge of Agr: binary [AgrP Agr XP], no Spec yet
     const item = def.ops[lv.s];
     const agr = AGR(lv, clone(tree));
@@ -533,7 +573,7 @@ function buildStates(def){
     S.push({tree, ty:'Merge', title:`Merge Agr_${lv.s}`,
       tx:`Agr<sub>${lv.s}</sub> merges with ${lv.fp}, projecting Agr<sub>${lv.s}</sub>P. It has no Spec yet.` + (item ? '' : ' Nothing moves at this layer.')});
     if (!item) return;
-    // Internal Merge (Move) into Spec,AgrP: this projects Agr′ and the Spec
+    // Internal Merge (Move) into Spec,AgrP: AgrP projects again (a second segment) with the moved phrase as its Spec
     const d = describeMove(agr, item, cat, lv.s, TYPES[def.L][n], def.L);
     const t = clone(agr), r = find(t, item);
     r.parent.kids[r.i] = {k:'t'+n, t:'trace', of:item, idx:IDX[item]};
@@ -606,6 +646,9 @@ function labelHTML(n){
   return s;
 }
 function topOff(t){ return t === 'chip' ? CH[1] : 8; } // the landing marker's top is aligned with a label's, so its branch matches exactly
+// the room branches leave around a node for its label: none at an unlabelled node, where they meet
+// (closing as its predecessor's label fades out there)
+const gapAt = s => s.t === 'seg' && !s.r.n.label ? 8*(1 - s.tO) : topOff(s.t);
 
 function drawNode(rec){
   const n = rec.n, g = document.createElementNS(NS, 'g');
@@ -629,7 +672,7 @@ function drawNode(rec){
 }
 function styleLabel(node){
   const n = node.n;
-  if (!['ph','fp','agr','bar'].includes(n.t)) return;
+  if (!['ph','fp','agr','seg'].includes(n.t)) return;
   const sig = n.label + (n.idx || '');
   if (node.sig === sig) return;
   node.sig = sig;
@@ -733,10 +776,11 @@ function evalRec(r, u){
   if (tw){
     const p = clamp01((u - tw.start)/tw.dur), e = ease(p);
     if (tw.reappear){
-      // fade out where it is, then fade back in at its new place (the label it leaves is taken over by X′)
+      // fade out where it is, then fade back in at its new place (the place it leaves is taken over by its lower
+      // segment: under the same label it simply vanishes there, as nothing visible changes)
       const back = p >= .5;
       s.x = back ? tw.tx : tw.fx; s.y = back ? tw.ty : tw.fy;
-      s.o = back ? (p - .5)/.5 : tw.fo*Math.max(0, 1 - p/.4);
+      s.o = back ? (p - .5)/.5 : tw.instant ? 0 : tw.fo*Math.max(0, 1 - p/.4);
       s.hide = !back; // its new branches exist only once it stands at its new place
     } else {
       if (tw.route){
@@ -815,17 +859,20 @@ function planStep(i, start, startCam){
   // every node takes up its place in `lay`; new ones fade in, missing ones fade out
   function scene(lay, opt = {}){
     const dur = opt.dur || 600, moved = new Set(opt.moved || []);
+    // a node taking over another's place (a projection's lower segment, after a Spec merges) under the same label:
+    // nothing changes there, so its label is shown at once and the node that leaves vanishes on the spot
+    const left = opt.reappear && last(opt.reappear), same = !!(left && lay.has(opt.crossfade) && left.n.label === lay.get(opt.crossfade).n.label);
     for (const rec of lay.values()){
       const prev = last(rec.k), cur = prev && now(rec.k), born = !cur;
       let fx, fy, fo, delayO = 0, xf = born ? null : prev.xf;
       if (born){
         fx = rec.x; fy = rec.y - (rec.t === 'trace' || opt.inPlace ? 0 : 14); fo = 0;
-        // appearing in place of an existing label: the node (and its branches) are solid at once, only the text fades in
-        if (rec.k === opt.crossfade){ fo = 1; xf = {start:t, dur:dur*.45}; }
+        // appearing in place of an existing label: the node (and its branches) are solid at once, only a new text fades in
+        if (rec.k === opt.crossfade){ fo = 1; xf = same ? null : {start:t, dur:dur*.45}; }
         else if (rec.t === 'trace' || opt.lateNew) delayO = opt.lateNew || .45;
       } else { fx = cur.x; fy = cur.y; fo = cur.o; }
       const reparent = !born && prev.parent !== rec.parent;
-      const tw = {fx, fy, fo, tx:rec.x, ty:rec.y, to:1, start:t, dur, late:reparent && moved.has(rec.k), reappear:rec.k === opt.reappear};
+      const tw = {fx, fy, fo, tx:rec.x, ty:rec.y, to:1, start:t, dur, late:reparent && moved.has(rec.k), reappear:rec.k === opt.reappear, instant:same};
       if (moved.has(rec.k) && opt.route){
         const R = opt.route;
         tw.route = R; tw.rel0 = {x:fx - R.p0.x, y:fy - R.p0.y}; tw.rel1 = {x:rec.x - R.p3.x, y:rec.y - R.p3.y};
@@ -853,7 +900,7 @@ function planStep(i, start, startCam){
     // External Merge: the existing tree (now the complement) keeps its place; the new
     // head, specifier and projections fade in around it at the upper left
     if (next.specMerge){
-      // A specifier merges: the old YP keeps its place and becomes Y′, the new YP and its Spec grow at the upper left
+      // A specifier merges: the old YP keeps its place as YP's lower segment, the new segment and the Spec grow at the upper left
       const K = next.specMerge, L = layout(next.tree);
       shift(L, L.get(K + 'b'), now(K));
       camTo(boundsOf(L.values()), 1000, around(L, fresh(L)));
@@ -867,8 +914,8 @@ function planStep(i, start, startCam){
     }
     rows.push({t, order:lin(next.tree)});
   } else {
-    // 1. Internal Merge begins: Agr′ appears and room opens for the Spec (dashed marker = landing site).
-    // The old AgrP, now Agr′, keeps its exact position: the new AgrP and the Spec grow out at the upper left.
+    // 1. Internal Merge begins: AgrP projects again and room opens for the Spec (dashed marker = landing site).
+    // The old AgrP, now its lower segment, keeps its exact position: the new segment and the Spec grow out at the upper left.
     const A = next.move.agr, item = next.move.item, preLay = layout(next.pre);
     shift(preLay, preLay.get(A + 'b'), now(A));
     camTo(boundsOf(preLay.values()), 1000, around(preLay, fresh(preLay)));
@@ -956,8 +1003,8 @@ function draw(g){
   for (const [k, s] of st){
     const el = els.get(k), P = s.r.parent && st.get(s.r.parent);
     if (!P){ el.edge.style.opacity = 0; continue; }
-    el.edge.setAttribute('x1', P.x); el.edge.setAttribute('y1', P.y + 8);
-    el.edge.setAttribute('x2', s.x); el.edge.setAttribute('y2', s.y - topOff(s.t));
+    el.edge.setAttribute('x1', P.x); el.edge.setAttribute('y1', P.y + gapAt(P));
+    el.edge.setAttribute('x2', s.x); el.edge.setAttribute('y2', s.y - gapAt(s));
     el.edge.style.opacity = P.hide ? 0 : (s.r.keepEdge ? P.o : Math.min(s.o, P.o)) * s.eo;
   }
   shown = st;
@@ -1184,7 +1231,12 @@ function select(L, autoplay = true){
   }
   $('summary').innerHTML = sm;
   $('stepCount').textContent = `${states.filter(s => s.move).length} move${states.filter(s => s.move).length === 1 ? '' : 's'}`;
-  // steps list
+  listSteps();
+  clearStage();
+  if (autoplay) setTimeout(() => { if (def.L === L && G === 0 && !playing && goal === null) togglePlay(); }, 700);
+}
+// the step list and the dots (rebuilt when the notation changes the explanations)
+function listSteps(){
   const ol = $('steps'); ol.innerHTML = '';
   states.forEach((s, i) => {
     const li = document.createElement('li');
@@ -1196,8 +1248,6 @@ function select(L, autoplay = true){
   });
   const dots = $('dots'); dots.innerHTML = '';
   states.forEach((s, i) => { const d = document.createElement('button'); d.title = `Step ${i+1}`; d.onclick = () => jump(i); dots.append(d); });
-  clearStage();
-  if (autoplay) setTimeout(() => { if (def.L === L && G === 0 && !playing && goal === null) togglePlay(); }, 700);
 }
 requestAnimationFrame(frame);
 
@@ -1391,7 +1441,11 @@ $('tabs').onclick = e => {
   [...$('tabs').children].forEach(x => x.classList.toggle('on', x === b));
 };
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape'){ closeSheet(); return; }
+  if (e.target.closest && e.target.closest('.set-wrap')){ // the panel's own keys (arrows and Space choose an option)
+    if (e.key === 'Escape'){ openSet(false); setBtn.focus(); }
+    return;
+  }
+  if (e.key === 'Escape'){ openSet(false); closeSheet(); return; }
   if (e.key === 'ArrowRight'){ e.preventDefault(); advance(); }
   else if (e.key === 'ArrowLeft'){ e.preventDefault(); retreat(); }
   else if (e.key === ' '){ e.preventDefault(); $('playBtn').click(); }
@@ -1404,6 +1458,24 @@ document.addEventListener('keydown', e => {
   else if (e.key.toLowerCase() === 'p') $('pathsBtn').click();
 });
 document.getElementById('themeBtn').onclick = () => lingvisToggleTheme();
+
+/* Tree notation: the panel under the settings button. A new notation redraws the derivation at the same step. */
+const setBtn = $('setBtn'), setPop = $('setPop');
+function openSet(open){ setPop.classList.toggle('open', open); setBtn.classList.toggle('on', open); setBtn.setAttribute('aria-expanded', open); }
+setBtn.onclick = () => openSet(!setPop.classList.contains('open'));
+document.addEventListener('pointerdown', e => { if (setPop.classList.contains('open') && !e.target.closest('.set-wrap')) openSet(false); });
+const syncNotation = () => document.querySelectorAll('input[name="notation"]').forEach(r => { r.checked = r.value === notation; });
+setPop.addEventListener('change', e => {
+  if (e.target.name !== 'notation' || e.target.value === notation) return;
+  notation = e.target.value;
+  try { localStorage.setItem('lingvis-u20-notation', notation); } catch (err) {}
+  const at = shownStep(), was = playing;
+  stop();
+  states = buildStates(def); listSteps();
+  fitView(); TL = compile(); G = TL.B[at]; clearStage();
+  playing = was; dwell = PAUSE;
+});
+syncNotation();
 
 // sanity check: every order derives its own surface string
 ORDERS.forEach(o => { const s = buildStates(o); if (lin(s.at(-1).tree).join(' ') !== o.order) console.error('mismatch', o.L); });
