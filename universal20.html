@@ -342,9 +342,9 @@ ol.steps li.cur .tx{display:block}
       </button>
       <div class="set-pop" id="setPop" role="dialog" aria-label="Tree notation">
         <h4>Tree notation</h4>
-        <label class="opt"><input type="radio" name="notation" value="seg"><b>Segments</b><span class="d">A specifier adds a segment of the same category: <code>[YP AP [YP Y NP]]</code>. Cinque’s notation in his (10), after Kayne (1994).</span></label>
-        <label class="opt"><input type="radio" name="notation" value="bare"><b>Unlabelled</b><span class="d">The node a specifier merges with has no label, as in Cinque’s trees (2) and (3).</span></label>
-        <label class="opt"><input type="radio" name="notation" value="bar"><b>X-bar</b><span class="d">Bar levels: <code>[YP AP [Y′ Y NP]]</code>. The conventional notation, not Cinque’s.</span></label>
+        <label class="opt"><input type="radio" name="notation" value="seg"><b>Segments</b><span class="d">A specifier adds a segment of the same category: <code>[<sub>YP</sub> AP [<sub>YP</sub> Y NP]]</code>. Cinque’s notation in his (10), after Kayne (1994).</span></label>
+        <label class="opt"><input type="radio" name="notation" value="bare"><b>Unlabelled</b><span class="d">The node a specifier merges with is drawn without a label, as in Cinque’s trees (2) and (3).</span></label>
+        <label class="opt"><input type="radio" name="notation" value="bar"><b>X-bar</b><span class="d">Bar levels: <code>[<sub>YP</sub> AP [<sub>Y′</sub> Y NP]]</code>. The conventional notation, not Cinque’s.</span></label>
       </div>
     </div>
     <button class="theme-btn" id="themeBtn" title="Toggle theme" aria-label="Toggle theme">
@@ -479,7 +479,7 @@ const head = (k, label) => ({k:'h-'+k, t:'head', label});
 // Strictly binary. A specifier merges with the projection it is the specifier of; how the node it merges
 // with (key: the projection's own + 'b') is labelled is the reader's choice of notation:
 //   seg  - Cinque's (10), after Kayne (1994): a second segment of the same category, [YP Spec [YP Y Compl]] (default)
-//   bare - Cinque's trees (2) and (3): no label at all
+//   bare - Cinque's trees (2) and (3): drawn without a label (a visual simplification, not a different structure)
 //   bar  - conventional X-bar theory: [YP Spec [Y′ Y Compl]]
 const NOTATIONS = ['seg', 'bare', 'bar'];
 let notation = 'seg';
@@ -546,8 +546,8 @@ function describeMove(tree, item, crossed, s, type, L){
 
 // what becomes of [Y Complement] when a specifier merges, in the reader's notation
 const specNote = (lv, comp) => ({
-  seg: `. ${lv.fp} projects again: [${lv.fp} ${lv.h} ${comp}] is now the lower segment of ${lv.fp}.`,
-  bare: `; [${lv.h} ${comp}] is left as an unlabelled node inside ${lv.fp}.`,
+  seg: `. ${lv.fp} projects again: [<sub>${lv.fp}</sub> ${lv.h} ${comp}] is now the lower segment of ${lv.fp}.`, // the label is subscript to its bracket
+  bare: `.`, // leaving a label undrawn is a picture of the tree, not a claim about it: nothing to say
   bar: `; [${lv.h} ${comp}] becomes ${lv.h}′.`
 })[notation];
 function buildStates(def){
@@ -646,7 +646,7 @@ function labelHTML(n){
   return s;
 }
 function topOff(t){ return t === 'chip' ? CH[1] : 8; } // the landing marker's top is aligned with a label's, so its branch matches exactly
-// the room branches leave around a node for its label: none at an unlabelled node, where they meet
+// the room branches leave around a node for its label: none at a node drawn without one, where they meet
 // (closing as its predecessor's label fades out there)
 const gapAt = s => s.t === 'seg' && !s.r.n.label ? 8*(1 - s.tO) : topOff(s.t);
 
